@@ -1,0 +1,24 @@
+QCDyn version： 0.3.dev
+Author: Zhubin Hu
+Release Date: Dec. 20, 2021
+
+Changelog:
+1. added "TCF_prefix" for the files of intermediate results when constructing MSH model parameter.
+
+Known issues:
+1. QVC model doesn't work.
+2. adiabatic propagation doesn't work for multi-state Condon model
+3. adiabatic propagation doesn't work for non-Condon model
+4. quasi-diabatic propagation does't work for non-Condon model
+
+QCDyn version： 0.3.0.2 dev
+Author: Xiaofang Zhang
+Release Date: Juen. 9, 2022
+
+Changelog:
+1. add the custom force field;
+2. add the polarizable force field (TTM3 model and TTM4 model);
+3. add the observable part 
+
+Known issues:
+1. TTM3 model is not apply to the As system

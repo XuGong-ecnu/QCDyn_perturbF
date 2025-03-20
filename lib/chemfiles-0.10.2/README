@@ -1,0 +1,29 @@
+Introduction:
+Chemfiles: a library for reading and writing chemistry files
+Chemfiles is a high-quality library for reading and writing trajectory files
+created by computational chemistry simulations programs. To help you access
+information (atomic positions, velocities, names, topology, etc.) about these
+files, Chemfiles provides a simple and unified interface to a variety of file
+formats.
+You can use Chemfiles to conduct post-processing analysis and extract physical
+information about the systems you're simulating, to convert files from one format
+to another, to write trajectories with your own simulation software, and anything
+that requires reading or writing the file formats used in computational chemistry.
+
+Downloading:
+https://github.com/chemfiles/chemfiles
+
+Building from Source:
+cd chemfiles
+mkdir build
+cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/path/to/install/
+make install -j 8
+
+Information:
+Current version: 0.10.2 released on Dec. 1, 2021.
+Complied by zhubin with GCC 7.3.0 on NYUSH-HPC argonlogin node on Dec. 13, 2021
+
+Modification by zhubin:
+The header files of XDR library were added into the "chemfiles.hpp" so that
+one can still directly use the original public functions in the XDR library.
