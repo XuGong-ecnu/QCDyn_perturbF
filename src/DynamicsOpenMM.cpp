@@ -198,8 +198,9 @@ void DynamicsOpenMM::perturbDynamics(int steps, int perturbStep, int forceFieldI
         dynamics(perturbStep);
     }
     // Apply perturbation forces
+    std::cout << "Apply force from ForceFieldPolar "<< std::endl; 
     applyPerturbForces(forceFieldIndex, scaleFactor);
-                                 
+    std::cout << "Finish apply force from ForceFieldPolar "<< std::endl;                       
     // Continue with remaining steps
     int remainingSteps = steps - perturbStep - 1;
     if (remainingSteps > 0) {
@@ -312,10 +313,11 @@ void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor)
     ha->updateContextState();
     ha->getPotentialEnergy(propagate_state, true);
     ha->getForces();
-    
+    ha->getPositions(); 
    
     std::vector<OpenMM::Vec3> perturbForces;
-    
+    perturbForces.resize(DOFn, OpenMM::Vec3(0.0, 0.0, 0.0));
+    std::cout<<"ha->getForceFieldForces(perturbForces) begins"<<std::endl;
     if (ha->getForceFieldForces(perturbForces)) {
         std::cout << "Applying perturbation forces from ForceField " << forceFieldIndex << std::endl;
         

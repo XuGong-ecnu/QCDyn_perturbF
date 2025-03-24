@@ -301,7 +301,7 @@ protected:
     // Parameters object controls the simulation
     Parameters& param;
     // force field parameters of the system
-    Topology topologies; 
+    Topology Topologies; 
     std::vector<FFBonds>           ffBonds;
     std::vector<FFAngles>         ffAngles;
     std::vector<FFDihedrals>   ffDihedrals;

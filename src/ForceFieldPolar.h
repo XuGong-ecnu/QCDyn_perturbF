@@ -215,6 +215,16 @@ public:
     void Perturb_Polar(std::vector<double>& DPi, std::vector<Vec3>& perturbforce);
     void Perturb_Dipole(std::vector<double>& DMu, std::vector<Vec3>& perturbforce);
     void Dk_E_perm(int k, std::vector<double>& DkE_perm, std::vector<double>& DkE);
+
+
+    //This is perturb MD for OpenMM
+    void calculatePerturbPolarForce_openmm(std::vector<Vec3>& forces, std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]);
+    void Perturb_Polar_openmm(std::vector<double>& DPi, std::vector<Vec3>& perturbforce); 
+    void Dk_Tij_tensor_openmm(int k, int i, int j, double DkTij[27], std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]);
+    void Dk_Pi_tensor_openmm(int k, std::vector<double>& iPi_all,
+                 std::vector<double>& Tij_all, int conf_diff, std::vector<double>& DkPi, std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]);
+    void Pi_tensor_openmm(std::vector<double>& iPi_all, std::vector<double>& iPi, std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]);    
+    
 protected:
     /** 
      * This is to get the atom or molecule polarizability

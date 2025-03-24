@@ -306,6 +306,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         if (line == "[ polars ]") {
             if (!moleculetypeTag)
                 throw std::runtime_error("ERROR: [ polars ] has to be after [ moleculetype ].");
+            std::cout<<"Start to Load Harmonic polars parameters into Polars from [ polars ]."<<std::endl;
             for ( ; getline(topfile, line); ) {
                 lineNumber++;
                 
@@ -318,6 +319,13 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
                 else {
                     std::vector<std::string> fields;
                     SplitLine(fields, line);
+
+                    std::cout << "Fields at line " << lineNumber << ": ";
+                    for (const auto& field : fields) {
+                        std::cout << field << " ";
+                    }
+                    std::cout << std::endl;
+
                     if (fields.size() < 7)
                         throw std::runtime_error("ERROR: Too few parameters for [ moleculetype ] in line " + std::to_string(lineNumber));
                     // Parameters are atomTypeIndex, atomType, and charge.

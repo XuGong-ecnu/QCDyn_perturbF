@@ -1789,7 +1789,8 @@ ForceFieldBase* HamiltonianOpenMM::getForceField(int index) {
 }
 */
 
-
+// version3 
+/*
 bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbForces) {
     int activeState = 0;  
     try {
@@ -1819,6 +1820,80 @@ bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbFo
     }
     
     return true;
+}
+*/
+
+
+bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbForces) {
+    try {
+        int activeState = 0;  
+        try {
+            activeState = param.getInt("propagate_state");
+        } catch (...) {
+         
+        }
+        std::cout<<" activeState is "<< activeState<< std::endl;        
+        if (activeState < 0 || activeState >= polarForceFields.size()) {
+            std::cerr << "Error: Invalid state index: " << activeState << std::endl;
+            return false;
+        }
+        std::cout<<" set auto ffPolar polarForceFields[activeState] "<< std::endl;
+        auto ffPolar = polarForceFields[activeState];
+        std::cout<<" Finsh set auto ffPolar polarForceFields[activeState] "<< std::endl;
+        if (!ffPolar) {
+            std::cerr << "Error: ForceField at state " << activeState << " is not initialized" << std::endl;
+            return false;
+        }
+        
+        std::vector<Vec3> tempForces(DOFn, Vec3(0, 0, 0));
+
+        std::vector<Vec3> tempR(DOFn, Vec3(0, 0, 0));
+        for (size_t i = 0; i < R.size() && i < tempR.size(); ++i) {
+            tempR[i] = Vec3(R[i][0], R[i][1], R[i][2]);
+        }
+   
+
+        std::cout<<"R 0 : " <<R[0]<<std::endl;
+        std::cout<<"R 0 : " <<R[1]<<std::endl;
+        std::cout<<"R 0 : " <<R[2]<<std::endl;
+        std::cout<<"R 0 : " <<R[3]<<std::endl;
+        std::cout<<"R 0 : " <<R[4]<<std::endl;
+        std::cout<<"tempR 0 : " <<tempR[0]<<std::endl;
+        std::cout<<"tempR 0 : " <<tempR[1]<<std::endl;
+        std::cout<<"tempR 0 : " <<tempR[2]<<std::endl;
+        std::cout<<"tempR 0 : " <<tempR[3]<<std::endl;
+        std::cout<<"tempR 0 : " <<tempR[4]<<std::endl;
+        Vec3 periodicBoxVectors_openmm[3] = {
+            Vec3(0, 0, 0),
+            Vec3(0, 0, 0),
+            Vec3(0, 0, 0)
+        };
+ 
+        OpenMM::Vec3 a, b, c;
+        getPeriodicBoxVectors(a, b, c);  
+        std::cout<<"getPeriodicBoxVectors"<<a<<" , "<<b<<" , "<<c<<std::endl;
+        periodicBoxVectors_openmm[0] = Vec3(a[0], a[1], a[2]);
+        periodicBoxVectors_openmm[1] = Vec3(b[0], b[1], b[2]);
+        periodicBoxVectors_openmm[2] = Vec3(c[0], c[1], c[2]);
+        std::cout<<"periodicBoxVectors_openmm"<<periodicBoxVectors_openmm[0]<<" , "<<periodicBoxVectors_openmm[1]<<" , "<<periodicBoxVectors_openmm[2]<<std::endl;
+        std::cout<<" start calcualtePerturbPolarForce(tempForces) "<< std::endl;
+        ffPolar->calculatePerturbPolarForce_openmm(tempForces,tempR,periodicBoxVectors_openmm);
+        std::cout<<" Finsh calcualtePerturbPolarForce(tempForces) "<< std::endl;
+        perturbForces.resize(tempForces.size());
+        for (size_t i = 0; i < tempForces.size(); ++i) {
+            perturbForces[i] = OpenMM::Vec3(tempForces[i][0], 
+                                           tempForces[i][1], 
+                                           tempForces[i][2]);
+        }
+        
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in getForceFieldForces: " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "Unknown exception in getForceFieldForces" << std::endl;
+        return false;
+    }
 }
 
 

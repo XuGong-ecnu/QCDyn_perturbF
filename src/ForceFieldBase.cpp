@@ -91,14 +91,14 @@ void ForceFieldBase::setVelocities(const std::vector<Vec3>& velocities) {
 }
 
 void ForceFieldBase::setTopologies(const Topology& fftopologies) {
-    topologies = fftopologies;
+    Topologies = fftopologies;
 }
 
 void ForceFieldBase::setForceFieldParameters() {
     int currentNumAtoms = 0;
-    for (int i = 0; i < topologies.molecules.size(); i++) {
-        for (int j = 0; j < topologies.molecules[i].moleculeNumber; j++) {
-            const Topology::MoleculeTypes& moleculeType = topologies.moleculeTypes[topologies.molecules[i].moleculeTypeIndex];
+    for (int i = 0; i < Topologies.molecules.size(); i++) {
+        for (int j = 0; j < Topologies.molecules[i].moleculeNumber; j++) {
+            const Topology::MoleculeTypes& moleculeType = Topologies.moleculeTypes[Topologies.molecules[i].moleculeTypeIndex];
             // * Add particles with mass to System from Atoms.
             for (int k = 0; k < moleculeType.newvdw.size(); k++) {
                 int indexI = moleculeType.newvdw[k].atomTypeIndex;
@@ -118,9 +118,9 @@ void ForceFieldBase::setForceFieldParameters() {
             for (int k = 0; k < moleculeType.atoms.size(); k++) {
                 int indexI = k + currentNumAtoms;
                 double charge = moleculeType.atoms[k].charge;
-                double mass = topologies.atomTypes[moleculeType.atoms[k].atomTypeIndex].mass;
-                double sigma = topologies.atomTypes[moleculeType.atoms[k].atomTypeIndex].sigma;
-                double epsilon = topologies.atomTypes[moleculeType.atoms[k].atomTypeIndex].epsilon;
+                double mass = Topologies.atomTypes[moleculeType.atoms[k].atomTypeIndex].mass;
+                double sigma = Topologies.atomTypes[moleculeType.atoms[k].atomTypeIndex].sigma;
+                double epsilon = Topologies.atomTypes[moleculeType.atoms[k].atomTypeIndex].epsilon;
                 ffLJ.push_back({indexI, sigma, epsilon});    
                 ffElec.push_back({indexI, charge, mass});       
             }   
@@ -136,11 +136,11 @@ void ForceFieldBase::setForceFieldParameters() {
                 double chargeI = ffElec[indexI].charge;
                 double chargeJ = ffElec[indexJ].charge;
                 double sigmaLJ, epsilonLJ;
-                double chargeProd = chargeI * chargeJ * topologies.forceFiled.Coulomb14Scale;
+                double chargeProd = chargeI * chargeJ * Topologies.forceFiled.Coulomb14Scale;
                 // Lorentz-Berthelot rule used by AMBER
-                if (topologies.forceFiled.combinationRule == 2) {
+                if (Topologies.forceFiled.combinationRule == 2) {
                     sigmaLJ = 0.5 * (sigmaI + sigmaJ);
-                    epsilonLJ = sqrt(epsilonI * epsilonJ) * topologies.forceFiled.LennardJones14Scale;
+                    epsilonLJ = sqrt(epsilonI * epsilonJ) * Topologies.forceFiled.LennardJones14Scale;
                 }        
                 ff14Intra.push_back({indexI, indexJ, sigmaLJ, epsilonLJ, chargeProd});
             }
