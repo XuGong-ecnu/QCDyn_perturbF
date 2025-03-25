@@ -2667,7 +2667,7 @@ void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& force
 
 
     Perturb_Polar_openmm(DPi, perturbforce);
-    
+    std::cout<< "direction is :"<<direction<<std::endl;    
     for (int i = 0; i < DOFn; i++) {
         if (direction) {
             forces[i][0] += perturbforce[i][0];
