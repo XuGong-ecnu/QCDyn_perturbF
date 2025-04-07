@@ -183,29 +183,37 @@ void DynamicsOpenMM::perturbDynamics(int steps, int perturbStep, int atomIndex, 
 
 //new version
 void DynamicsOpenMM::perturbDynamics(int steps, int perturbStep, int forceFieldIndex, double scaleFactor) {
-    if (perturbStep < 0 || perturbStep >= steps) {
-        std::cerr << "Warning: perturbStep " << perturbStep << " is outside the range [0," << steps-1 << "]" << std::endl;
-        dynamics(steps);
-        return;
-    }
+    const int nsteps = param.getInt("nsteps");
+//    if (perturbStep < 0 || perturbStep >= nsteps) {
+//        std::cerr << "Warning: perturbStep " << perturbStep << " is outside the range [0," << steps-1 << "]" << std::endl;
+//        dynamics(steps);
+//        return;
+//    }
     
     std::cout << "Will apply perturbation forces from ForceField " << forceFieldIndex 
               << " at step " << (step + perturbStep) 
               << " with scale factor " << scaleFactor << std::endl;
     
     // Run dynamics up to the perturbation step
-    if (perturbStep > 0) {
-        dynamics(perturbStep);
-    }
+//    if (perturbStep > 0) {
+//        dynamics(perturbStep);
+//    }
     // Apply perturbation forces
-    std::cout << "Apply force from ForceFieldPolar "<< std::endl; 
+    
+    std::cout << "Apply force from ForceFieldPolar "<< std::endl;
+    
     applyPerturbForces(forceFieldIndex, scaleFactor);
+    std::cout << "After apply atom force: ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+    
     std::cout << "Finish apply force from ForceFieldPolar "<< std::endl;                       
     // Continue with remaining steps
-    int remainingSteps = steps - perturbStep - 1;
-    if (remainingSteps > 0) {
-        dynamics(remainingSteps);
-    }
+//    int remainingSteps = steps - perturbStep - 1;
+//    if (remainingSteps > 0) {
+//        dynamics(remainingSteps);
+//    }
 }
 
 
@@ -308,22 +316,24 @@ void DynamicsOpenMM::applyCustomForce(int atomIndex, double fx, double fy, doubl
 
 void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor) {
     static const int propagate_state = param.getInt("propagate_state");
-    
-    
+ 
     ha->updateContextState();
-    ha->getPotentialEnergy(propagate_state, true);
+//    ha->getPotentialEnergy(propagate_state, true);
+//    ha->getKineticEnergy();
     ha->getForces();
     ha->getPositions(); 
-   
     std::vector<OpenMM::Vec3> perturbForces;
+    ha->getVelocities();
+
     perturbForces.resize(DOFn, OpenMM::Vec3(0.0, 0.0, 0.0));
-    std::cout<<"ha->getForceFieldForces(perturbForces) begins"<<std::endl;
+    double kineticenergy = ha->getKineticEnergy();
+
     if (ha->getForceFieldForces(perturbForces)) {
         std::cout << "Applying perturbation forces from ForceField " << forceFieldIndex << std::endl;
         
         
         if (!ha->F.empty() && !perturbForces.empty()) {
-            
+            std::cout << std::fixed << std::setprecision(10);
             std::cout << "First atom original force: (" 
                       << ha->F[0][0] << ", " 
                       << ha->F[0][1] << ", " 
@@ -354,17 +364,201 @@ void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor)
     } else {
         std::cerr << "Warning: Failed to get perturbation forces from ForceField " << forceFieldIndex << std::endl;
     }
-    
-    
-    ha->uploadForces();
-    
-    
-    if (dyn_type == "OpenMM") { 
-        integrator->oneStep(ha->F);
-    } else { 
-        myOneStep();
+        
+
+    ha ->uploadForces();
+//  ha->updateContextState();
+    kineticenergy = ha->getKineticEnergy();
+    std::cout << "After added perturb force kinetic energy is: "<<kineticenergy<<std::endl;
+//    this->step += 1;
+    integrator->oneStep(ha->F);
+//    ha->getForces();
+//    ha->getVelocity();
+//    ha->updateContextState();
+//    ha->getVelocities(); 
+//    std::cout << "First atom velocity end interation is: ("
+//                      << ha->V[0][0] << ", "
+//                      << ha->V[0][1] << ", "
+//                      << ha->V[0][2] << ") nm/ps" << std::endl;
+//    kineticenergy = ha->getKineticEnergy();
+//    std::cout << "First atom end kinetic energy is: "<<kineticenergy<<std::endl;
+    ha->updateContextState();
+    ha->getForces();
+    ha->getPositions();
+    ha->getVelocities();
+
+    if (ha->getForceFieldForces(perturbForces)) {
+        std::cout << "Applying perturbation forces from ForceField " << forceFieldIndex << std::endl;
+
+
+        if (!ha->F.empty() && !perturbForces.empty()) {
+            std::cout << std::fixed << std::setprecision(10);
+            std::cout << "First atom original force: ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+
+
+            std::cout << "First atom perturbation force: ("
+                      << perturbForces[0][0] * scaleFactor << ", "
+                      << perturbForces[0][1] * scaleFactor << ", "
+                      << perturbForces[0][2] * scaleFactor << ") kJ/mol/nm" << std::endl;
+        }
+
+
+        for (int i = 0; i < ha->F.size(); i++) {
+
+            ha->F[i][0] += perturbForces[i][0] * scaleFactor;
+            ha->F[i][1] += perturbForces[i][1] * scaleFactor;
+            ha->F[i][2] += perturbForces[i][2] * scaleFactor;
+        }
+
+
+        if (!ha->F.empty()) {
+            std::cout << "First atom modified force: ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+        }
     }
-    
     this->step += 1;
-}
+}   
+
+
+
+
+/*
+void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor) {
+    static const int propagate_state = param.getInt("propagate_state");
+    //ha->updateContextState();
+    std::vector<OpenMM::Vec3> perturbForces;
+    perturbForces.resize(DOFn, OpenMM::Vec3(0.0, 0.0, 0.0));
+        if (ha->getForceFieldForces(perturbForces)) {
+        std::cout << "Applying perturbation forces from ForceField " << forceFieldIndex << std::endl;
+
+
+        if (!ha->F.empty() && !perturbForces.empty()) {
+            std::cout << std::fixed << std::setprecision(10);
+            std::cout << "First atom original force: ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+           std::cout << "First atom perturbation force: ("
+                      << perturbForces[0][0] * scaleFactor << ", "
+                      << perturbForces[0][1] * scaleFactor << ", "
+                      << perturbForces[0][2] * scaleFactor << ") kJ/mol/nm" << std::endl;
+        }
+
+
+        for (int i = 0; i < ha->F.size(); i++) {
+
+            ha->F[i][0] += perturbForces[i][0] * scaleFactor;
+            ha->F[i][1] += perturbForces[i][1] * scaleFactor;
+            ha->F[i][2] += perturbForces[i][2] * scaleFactor;
+        }
+
+
+        if (!ha->F.empty()) {
+            std::cout << "First atom modified force: ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+        }
+    } else {
+        std::cerr << "Warning: Failed to get perturbation forces from ForceField " << forceFieldIndex << std::endl;
+    }
+
+    ha->getForces();
+    ha->getPositions();
+    ha->getVelocities();
+    std::cout << "First atom force to Integrate is : ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+
+    integrator->oneStep(ha->F);
+//    ha->updateContextState();
+//    ha->getPotentialEnergy(propagate_state, true);
+//    ha->getKineticEnergy();
+    ha->getForces();
+    ha->getPositions();
+//    std::vector<OpenMM::Vec3> perturbForces;
+    ha->getVelocities();
+
+//    perturbForces.resize(DOFn, OpenMM::Vec3(0.0, 0.0, 0.0));
+    double kineticenergy = ha->getKineticEnergy();
+
+    std::cout<<"ha->getForceFieldForces(perturbForces) begins"<<std::endl;
+    std::cout << std::fixed << std::setprecision(10);
+    std::cout << "First atom before kinetic energy is: "<<kineticenergy<<std::endl;
+    std::cout << "First atom velocity before interation is: ("
+                      << ha->V[0][0] << ", "
+                      << ha->V[0][1] << ", "
+                      << ha->V[0][2] << ") nm/ps" << std::endl;
+    if (ha->getForceFieldForces(perturbForces)) {
+        std::cout << "Applying perturbation forces from ForceField " << forceFieldIndex << std::endl;
+
+
+        if (!ha->F.empty() && !perturbForces.empty()) {
+            std::cout << std::fixed << std::setprecision(10);
+            std::cout << "First atom original force: ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+           std::cout << "First atom perturbation force: (" 
+                      << perturbForces[0][0] * scaleFactor << ", " 
+                      << perturbForces[0][1] * scaleFactor << ", " 
+                      << perturbForces[0][2] * scaleFactor << ") kJ/mol/nm" << std::endl;
+        }
+        
+        
+        for (int i = 0; i < ha->F.size(); i++) {
+           
+            ha->F[i][0] += perturbForces[i][0] * scaleFactor;
+            ha->F[i][1] += perturbForces[i][1] * scaleFactor;
+            ha->F[i][2] += perturbForces[i][2] * scaleFactor;
+        }
+        
+       
+        if (!ha->F.empty()) {
+            std::cout << "First atom modified force: (" 
+                      << ha->F[0][0] << ", " 
+                      << ha->F[0][1] << ", " 
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+        }
+    } else {
+        std::cerr << "Warning: Failed to get perturbation forces from ForceField " << forceFieldIndex << std::endl;
+    }
+        
+
+    ha ->uploadForces();
+//    ha->updateContextState();
+    std::cout << std::fixed << std::setprecision(10);
+            std::cout << "upload atom force: ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+
+    kineticenergy = ha->getKineticEnergy();
+    std::cout << "After added perturb force kinetic energy is: "<<kineticenergy<<std::endl;
+    this->step += 1;
+
+    ha->getForces();
+
+
+//    ha->getVelocity();
+//    ha->updateContextState();
+    ha->getVelocities(); 
+    std::cout << "First atom velocity end interation is: ("
+                      << ha->V[0][0] << ", "
+                      << ha->V[0][1] << ", "
+                      << ha->V[0][2] << ") nm/ps" << std::endl;
+    kineticenergy = ha->getKineticEnergy();
+    std::cout << "First atom end kinetic energy is: "<<kineticenergy<<std::endl;
+    std::cout << "get atom force: ("
+                      << ha->F[0][0] << ", "
+                      << ha->F[0][1] << ", "
+                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
+
+} */ 
 

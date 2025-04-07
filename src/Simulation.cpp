@@ -1336,21 +1336,29 @@ void Simulation::runPerturbOpenMM(int traj, int nsteps) {
     
     std::vector<int> perturb_parameters;
     SplitString(perturb_parameters, param.getStr("perturb_parameters"));
-    
+    static std::shared_ptr<HamiltonianOpenMM> ha = std::static_pointer_cast<HamiltonianOpenMM>(Ha);
+            static Structure structure; // empty Structure object
+        // Get writable reference to structure data member
+        static std::vector<std::string>&  atominfo   = structure.getAtomInfo();
+        static std::vector<OpenMM::Vec3>& positions  = structure.getPositions();
+        static std::vector<OpenMM::Vec3>& velocities = structure.getVelocities();
+        static std::vector<OpenMM::Vec3>& forces     = structure.getForces();    
     if (perturb_parameters.size() < 2) {
         throw std::runtime_error("ERROR: perturb_parameters should contain at least 2 values: step,forceFieldIndex,scaleFactor");
     }
     
     int perturbStep = perturb_parameters[0];
-    int forceFieldIndex = perturb_parameters[1];
-    double scaleFactor = perturb_parameters.size() > 2 ? perturb_parameters[2] : 1.0;
-    
+    int endperturbStep = perturb_parameters[1];
+    int forceFieldIndex = perturb_parameters[2];
+    double scaleFactor = perturb_parameters[3];
+    std::cout<<"perturbStep is "<<perturbStep<<" endperturbStep is  "<<endperturbStep<<"   scaleFactor is  "<<scaleFactor<<std::endl; 
     std::shared_ptr<DynamicsOpenMM> dynOpenMM = std::static_pointer_cast<DynamicsOpenMM>(Dy);
     
     if (step % skip_steps != 0) {
+        std::cout<<" Enter the step  skip_steps : " << step<<std::endl;
         int run_steps = skip_steps - (step % skip_steps);
         
-        if (perturbStep >= step && perturbStep < step + run_steps) {
+        if (perturbStep <= step && endperturbStep > step+run_steps) {
             
             dynOpenMM->perturbDynamics(run_steps, perturbStep - step, forceFieldIndex, scaleFactor);
         } else {
@@ -1362,17 +1370,45 @@ void Simulation::runPerturbOpenMM(int traj, int nsteps) {
     }
   
     for (; step < nsteps;) {
-        int stepsToRun = std::min(skip_steps, nsteps - step);
         
-        if (perturbStep >= step && perturbStep < step + stepsToRun) {
+        int stepsToRun = std::min(skip_steps, nsteps - step);
+        std::cout<<" Enter the step  : " << step<<"   and the stepsToRun is "<<stepsToRun<<std::endl; 
+        if (perturbStep <= step && endperturbStep > step) {
             
             dynOpenMM->perturbDynamics(stepsToRun, perturbStep - step, forceFieldIndex, scaleFactor);
-        } else {
+        }       
+	else {
             dynOpenMM->dynamics(stepsToRun);
         }
-        
+         
+        ha->getForces(forces);
+            
+            // Print the forces of the first atom
+            if (!forces.empty()) { // Ensure there are forces to print
+                std::cout << std::fixed << std::setprecision(10);
+                const OpenMM::Vec3& firstAtomForce = forces[0];
+                std::cout << "1. Force on the first atom: ("
+                          << firstAtomForce[0] << ", "
+                          << firstAtomForce[1] << ", "
+                          << firstAtomForce[2] << ")"
+                          << std::endl;
+            }
+
         step += stepsToRun;
         report(traj, step);
+	        ha->getForces(forces);
+
+            // Print the forces of the first atom
+            if (!forces.empty()) { // Ensure there are forces to print
+                std::cout << std::fixed << std::setprecision(10);
+                const OpenMM::Vec3& firstAtomForce = forces[0];
+                std::cout << "3. Force on the first atom: ("
+                          << firstAtomForce[0] << ", "
+                          << firstAtomForce[1] << ", "
+                          << firstAtomForce[2] << ")"
+                          << std::endl;
+            }
+
     }
 }
 
@@ -1592,6 +1628,7 @@ void Simulation::reportOpenMMData(int traj, int step) {
     }
     // Get smarter ponter to the HamiltonianOpenMM obejct
     static std::shared_ptr<HamiltonianOpenMM> ha = std::static_pointer_cast<HamiltonianOpenMM>(Ha);
+
     // Get the total number of trajectory (for classical MD, ntraj is always 1)
     // and steps and the frequency (number of steps) to report.
     // Note, the data of step 0 (initial configuration) and last step will be
@@ -1626,6 +1663,7 @@ void Simulation::reportOpenMMData(int traj, int step) {
     // 2. Report energies, and other data, such as temeprature
     // For multi-traj simultaion (ntraj > 1), the data filename of each trajectory
     // will add a suffix "_traj?", where "?" is the index of traj (starting from 1).
+
     if (energy_steps > 0 && (step % energy_steps == 0 || step == nsteps)) {
         static const std::string data_file = useDefault ? (default_name + ".csv") : param.getStr("data_file");
         std::string filename = ntraj == 1 ? data_file : GetFilePrefix(data_file) + "_traj" + std::to_string(traj) + "." + GetFileSuffix(data_file);
@@ -1634,6 +1672,8 @@ void Simulation::reportOpenMMData(int traj, int step) {
         getStateData(traj, data, false, energy_decompose);
         writeStateData(filename, data, step, time);
     }
+                
+
     // 3. Report trajectory: coordinates, (optional velocities and forces)
     // TODO: using structure object in Hamiltonina directly
     // TODO with function updateStructureData(includeForces)
@@ -1686,15 +1726,6 @@ void Simulation::reportOpenMMData(int traj, int step) {
         static std::vector<OpenMM::Vec3>& velocities = structure.getVelocities();
         static std::vector<OpenMM::Vec3>& forces     = structure.getForces();
         static OpenMM::Vec3         (&boxVectors)[3] = structure.getBoxVectors();
-        // test for print force data for first atom. March 14 2025
-      //  std::cout<<"This is step: "<<step<<std::endl;
-
-        //std::cout << "First force: ("
-       //           << forces[0] << ", "  // x
-       //           << forces[1] << ", "  // y
-       //           << forces[2] << ")"    // z
-       //           << std::endl;
-
 
         // Set the atominfo and natoms, and never change
         if (frame == 0 && traj == 1) { // do this at first time for first trajectory
@@ -1731,7 +1762,8 @@ void Simulation::reportOpenMMData(int traj, int step) {
             }
             // Print the forces of the first atom
             if (!forces.empty()) { // Ensure there are forces to print
-                const OpenMM::Vec3& firstAtomForce = forces[0];
+                std::cout << std::fixed << std::setprecision(10);
+		const OpenMM::Vec3& firstAtomForce = forces[0];
                 std::cout << "Force on the first atom: ("
                           << firstAtomForce[0] << ", "
                           << firstAtomForce[1] << ", "
@@ -2089,10 +2121,12 @@ void Simulation::getStateData(int traj, std::vector<double>& data, bool includeF
     // trajectory for classical MD simulation with OpenMM.
     if (needForces)
         if (dyn_type == "OpenMM") // this will update the forces in Context
-            potentialEnergy = ha->getPotentialEnergy(propagate_state, needForces);
+            potentialEnergy = ha->getPotentialEnergy(propagate_state, needForces);  
         else // For nonadiabatic dynamics, upload the effective forces (F) to Context
             ha->uploadForces();
+
     kineticEnergy = ha->getKineticEnergy();
+    std::cout<<"In report kinetic energy is :"<<kineticEnergy<<std::endl;
     // Get instantaneous temperature (in K)
     // temperature is computed by the formula: T = 2 * Ek / DOF / Rbar,
     // Rbar is gas constant, Rbar = 8.31446261815324e-3 kj/mol/K.

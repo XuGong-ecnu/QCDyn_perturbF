@@ -1853,16 +1853,16 @@ bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbFo
         }
    
 
-        std::cout<<"R 0 : " <<R[0]<<std::endl;
-        std::cout<<"R 0 : " <<R[1]<<std::endl;
-        std::cout<<"R 0 : " <<R[2]<<std::endl;
-        std::cout<<"R 0 : " <<R[3]<<std::endl;
-        std::cout<<"R 0 : " <<R[4]<<std::endl;
-        std::cout<<"tempR 0 : " <<tempR[0]<<std::endl;
-        std::cout<<"tempR 0 : " <<tempR[1]<<std::endl;
-        std::cout<<"tempR 0 : " <<tempR[2]<<std::endl;
-        std::cout<<"tempR 0 : " <<tempR[3]<<std::endl;
-        std::cout<<"tempR 0 : " <<tempR[4]<<std::endl;
+//        std::cout<<"R 0 : " <<R[0]<<std::endl;
+//        std::cout<<"R 0 : " <<R[1]<<std::endl;
+//        std::cout<<"R 0 : " <<R[2]<<std::endl;
+//        std::cout<<"R 0 : " <<R[3]<<std::endl;
+//        std::cout<<"R 0 : " <<R[4]<<std::endl;
+//        std::cout<<"tempR 0 : " <<tempR[0]<<std::endl;
+//        std::cout<<"tempR 0 : " <<tempR[1]<<std::endl;
+//        std::cout<<"tempR 0 : " <<tempR[2]<<std::endl;
+//        std::cout<<"tempR 0 : " <<tempR[3]<<std::endl;
+//        std::cout<<"tempR 0 : " <<tempR[4]<<std::endl;
         Vec3 periodicBoxVectors_openmm[3] = {
             Vec3(0, 0, 0),
             Vec3(0, 0, 0),
@@ -1871,14 +1871,14 @@ bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbFo
  
         OpenMM::Vec3 a, b, c;
         getPeriodicBoxVectors(a, b, c);  
-        std::cout<<"getPeriodicBoxVectors"<<a<<" , "<<b<<" , "<<c<<std::endl;
+//        std::cout<<"getPeriodicBoxVectors"<<a<<" , "<<b<<" , "<<c<<std::endl;
         periodicBoxVectors_openmm[0] = Vec3(a[0], a[1], a[2]);
         periodicBoxVectors_openmm[1] = Vec3(b[0], b[1], b[2]);
         periodicBoxVectors_openmm[2] = Vec3(c[0], c[1], c[2]);
-        std::cout<<"periodicBoxVectors_openmm"<<periodicBoxVectors_openmm[0]<<" , "<<periodicBoxVectors_openmm[1]<<" , "<<periodicBoxVectors_openmm[2]<<std::endl;
-        std::cout<<" start calcualtePerturbPolarForce(tempForces) "<< std::endl;
+//        std::cout<<"periodicBoxVectors_openmm"<<periodicBoxVectors_openmm[0]<<" , "<<periodicBoxVectors_openmm[1]<<" , "<<periodicBoxVectors_openmm[2]<<std::endl;
+//        std::cout<<" start calcualtePerturbPolarForce(tempForces) "<< std::endl;
         ffPolar->calculatePerturbPolarForce_openmm(tempForces,tempR,periodicBoxVectors_openmm);
-        std::cout<<" Finsh calcualtePerturbPolarForce(tempForces) "<< std::endl;
+//        std::cout<<" Finsh calcualtePerturbPolarForce(tempForces) "<< std::endl;
         perturbForces.resize(tempForces.size());
         for (size_t i = 0; i < tempForces.size(); ++i) {
             perturbForces[i] = OpenMM::Vec3(tempForces[i][0], 

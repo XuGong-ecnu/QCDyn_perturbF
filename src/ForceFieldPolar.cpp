@@ -2168,8 +2168,8 @@ void ForceFieldPolar::Pi_tensor_openmm(std::vector<double>& iPi_all, std::vector
     double tol(1); //tolerance
     
     double alpha[DOFn]; //assign single molecular polarizability
-    std::cout<<"Start to assign single molecular polarizability"<<std::endl;
-    std::cout<<"DOFn is "<<DOFn<<std::endl;
+//    std::cout<<"Start to assign single molecular polarizability"<<std::endl;
+//    std::cout<<"DOFn is "<<DOFn<<std::endl;
     for (int i = 0; i < DOFn; i++) {
     //    alpha[i] = ffPolars[i].alpha/1000.0;
           alpha[i] = 0.00163;
@@ -2205,10 +2205,10 @@ void ForceFieldPolar::Pi_tensor_openmm(std::vector<double>& iPi_all, std::vector
                 pi2[i * 9 + k] = 0;
             }
         }
-        std::cout<<"atom 0 R is "<<R_openmm[0]<<std::endl;
-        std::cout<<"atom 0 R is "<<R_openmm[1]<<std::endl;
-        std::cout<<"atom 0 R is "<<R_openmm[2]<<std::endl;
-        std::cout<<"periodicBoxVectors"<<periodicBoxVectors_openmm[0]<<", "<<periodicBoxVectors_openmm[1]<<", "<<periodicBoxVectors_openmm[2]<<std::endl;        
+//        std::cout<<"atom 0 R is "<<R_openmm[0]<<std::endl;
+//        std::cout<<"atom 0 R is "<<R_openmm[1]<<std::endl;
+//        std::cout<<"atom 0 R is "<<R_openmm[2]<<std::endl;
+//        std::cout<<"periodicBoxVectors"<<periodicBoxVectors_openmm[0]<<", "<<periodicBoxVectors_openmm[1]<<", "<<periodicBoxVectors_openmm[2]<<std::endl;        
         //start new iteration for pi2[i=1...N][9]
         for (int i = 0; i < DOFn; i++) {
             for (int j = 0; j < DOFn; j++) {
@@ -2231,7 +2231,7 @@ void ForceFieldPolar::Pi_tensor_openmm(std::vector<double>& iPi_all, std::vector
                 deltaR[2] = diff[2];
                 deltaR[3] = diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2];
                 deltaR[4] = sqrt(deltaR[3]);
-                if (i==0&&j==1){std::cout<<"deltaR for atom0 to atom1 is "<<deltaR[0]<<", "<<deltaR[1]<<", "<<deltaR[2]<<", "<<deltaR[3]<<", "<<deltaR[4]<<std::endl;}
+//                if (i==0&&j==1){std::cout<<"deltaR for atom0 to atom1 is "<<deltaR[0]<<", "<<deltaR[1]<<", "<<deltaR[2]<<", "<<deltaR[3]<<", "<<deltaR[4]<<std::endl;}
                 rm1 = 1.0 / deltaR[4];
                 rm2 = rm1 * rm1;
                 rm3 = rm1 * rm2;
@@ -2612,8 +2612,8 @@ void ForceFieldPolar::Dk_Tij_tensor_openmm(int k, int i, int j, double DkTij[27]
 
 
 void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& forces, std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]) {
-    std::cout<<"start to using ForceFieldPolar::calcualtePerturbPolarForce(std::vector<Vec3>& forces): "<<std::endl<<
-               "The First forces is "<< forces[0][0]<< "  "<<forces[0][1]<< "  "<<forces[0][2]<<std::endl;
+//    std::cout<<"start to using ForceFieldPolar::calcualtePerturbPolarForce(std::vector<Vec3>& forces): "<<std::endl<<
+//               "The First forces is "<< forces[0][0]<< "  "<<forces[0][1]<< "  "<<forces[0][2]<<std::endl;
     std::vector<Vec3> perturbforce;
     perturbforce.resize(DOFn, Vec3(0.0,0.0,0.0));
     int conf_diff;
@@ -2640,13 +2640,13 @@ void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& force
     }   
 
 
-    std::cout<<"Finish initilize the parameters"<<std::endl<<"Stat to calculate Pi_tensor"<<std::endl;
+//    std::cout<<"Finish initilize the parameters"<<std::endl<<"Stat to calculate Pi_tensor"<<std::endl;
 
     Pi_tensor_openmm(iPi_all, iPi,R_openmm,periodicBoxVectors_openmm);
-    for(int k=0;k<9;k++){
-       std::cout<<"Pi is :" <<iPi[k]<<std::endl; 
-    }
-    std::cout<<"Finish to calculate Pi_tensor"<<std::endl;
+//    for(int k=0;k<9;k++){
+//       std::cout<<"Pi is :" <<iPi[k]<<std::endl; 
+//    }
+//    std::cout<<"Finish to calculate Pi_tensor"<<std::endl;
 
     conf_diff = 1;
    
@@ -2658,16 +2658,16 @@ void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& force
         for (int u = 0; u < 27; u++) DPi[k * 27 + u] = DkPi[u]; //update Deriv of Pi for all atoms
     }
 
-    for(int k=0;k<135;k++){
-       if(k%27==0){std::cout<<"atom "<<k<<" is "<<std::endl;}
-       std::cout<<"Dk is :"<<k<<" : " <<DPi[k]<<std::endl;
-    }
+//    for(int k=0;k<135;k++){
+//       if(k%27==0){std::cout<<"atom "<<k<<" is "<<std::endl;}
+//       std::cout<<"Dk is :"<<k<<" : " <<DPi[k]<<std::endl;
+//    }
     
 
 
 
     Perturb_Polar_openmm(DPi, perturbforce);
-    std::cout<< "direction is :"<<direction<<std::endl;    
+//    std::cout<< "direction is :"<<direction<<std::endl;    
     for (int i = 0; i < DOFn; i++) {
         if (direction) {
             forces[i][0] += perturbforce[i][0];
@@ -2722,10 +2722,10 @@ void ForceFieldPolar::Perturb_Polar_openmm(std::vector<double>& DPi, std::vector
             perturbforce[k][u] -= DPi[27 * k + munu + u] * perturb_fields;  //F = - dV/dr         
         }
     }
-    std::cout<<"perturbforce on atom 0 is : "<<std::endl; 
-    std::cout<<"x: " <<perturbforce[0][0]<<std::endl;
-    std::cout<<"y: " <<perturbforce[0][1]<<std::endl;
-    std::cout<<"z: " <<perturbforce[0][2]<<std::endl;
+//    std::cout<<"perturbforce on atom 0 is : "<<std::endl; 
+//    std::cout<<"x: " <<perturbforce[0][0]<<std::endl;
+//    std::cout<<"y: " <<perturbforce[0][1]<<std::endl;
+//    std::cout<<"z: " <<perturbforce[0][2]<<std::endl;
 }
 
 

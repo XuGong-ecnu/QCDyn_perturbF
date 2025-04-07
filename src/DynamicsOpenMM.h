@@ -50,7 +50,7 @@ public:
      */
  //   void perturbDynamics(int steps, int perturbStep, int atomIndex, double fx, double fy, double fz);//add by Xu
     void afterOneTraj() {}
-    void perturbDynamics(int steps, int perturbStep, int forceFieldIndex, double scaleFactor);
+    void perturbDynamics(int steps, int perturbStep,  int forceFieldIndex, double scaleFactor);
     
 private:
     /**
