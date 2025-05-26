@@ -646,16 +646,14 @@ private:
      * @param perturbForces vector to store the calculated perturbation forces
      * @return true if forces were successfully calculated, false otherwise
      **/
-bool getForceFieldForces(std::vector<OpenMM::Vec3>& perturbForces);
-
+bool getForceFieldForces(std::vector<OpenMM::Vec3>& perturbForces, int pulse_type);
+void getForceFieldForces(std::vector<double>& Pi);
     /**
      * Get access to the ForceField object at the specified index
      *   
      * @param index the index of the ForceField to retrieve
      * @return pointer to the ForceField object, or nullptr if not found
      **/
-//     ForceFieldBase* getForceField(int index = 0);
-
 
 private:
     std::vector<std::shared_ptr<ForceFieldPolar>> polarForceFields;
@@ -735,7 +733,7 @@ private:
     // heavyHydrogenMass or set to 0 to freeze a atom.
     // 1 atomic mass unit = 1.660538921e-27 kg. (Reference: Gromacs manual)
     // Here, inverseMasses is 1.0 / mass of each particle.
-    std::vector<double> masses, inverseMasses;
+    std::vector<double> masses, inverseMasses, alpha_e;
     // nuclear positions (in nm) that to be propagated
     std::vector<OpenMM::Vec3> R;
     // nuclear velocities (in nm/ps) that to be propagated

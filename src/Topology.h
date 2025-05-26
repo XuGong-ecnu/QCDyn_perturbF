@@ -228,6 +228,7 @@ public:
     * in this system, and so on.
     */
     void printTopologyInfo() const;
+    std::vector<double> getPolarizabilityValues() const;
 private:
     /**
      * Load force filed paramters from Gromacs topology file.

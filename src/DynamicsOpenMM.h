@@ -9,6 +9,7 @@
 
 #pragma once
 #include "DynamicsBase.h"
+#include "ForceFieldPolar.h" // Include this at the top
 
 /**
  * This subclass is used to run a general MD simulation with OpenMM Integrator.
@@ -50,8 +51,14 @@ public:
      */
  //   void perturbDynamics(int steps, int perturbStep, int atomIndex, double fx, double fy, double fz);//add by Xu
     void afterOneTraj() {}
-    void perturbDynamics(int steps, int perturbStep,  int forceFieldIndex, double scaleFactor);
-    
+    void perturbDynamics(int steps, int perturbStep,  int forceFieldIndex, double scaleFactor, int pulse_type);
+ // In the DynamicsOpenMM class declaration, replace the existing Pi_update declaration with:
+    void Pi_update(); // Version without parameters for normal dynamics
+    void Pi_update(std::vector<double>& Pi_store); // Version with vector reference to store Pi
+
+
+
+
 private:
     /**
      * Do nuclear propagation with one step with providing the external forces
@@ -60,7 +67,7 @@ private:
      */
     void myOneStep();
     //void applyCustomForce(int forceFieldIndex, double scaleFactor);   
-    void applyPerturbForces(int forceFieldIndex, double scaleFactor);
+    void applyPerturbForces(int forceFieldIndex, double scaleFactor, int pulse_type);
 private:
     // The smarter pointer to HamiltonianOpenMM object.
     std::shared_ptr<HamiltonianOpenMM> ha;

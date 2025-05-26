@@ -54,6 +54,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         // Load parameters into ForceField from [ defaults ],
         // which should be the first section as Gromacs request.
         if (line == "[ defaults ]") {
+            std::cout<<"Enter the defaluts part"<<std::endl;
             defaultsTag = true;
             for ( ; getline(topfile, line); ) {
                 lineNumber++;
@@ -80,6 +81,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         // Load mass and LJ parameters into AtomTypes from [ atomtypes ],
         // which should be before any [ moleculetype ] as Gromacs request.
         if (line == "[ atomtypes ]") {
+	    std::cout<<"Enter the atomtypes part"<<std::endl;
             atomstypeTag = true;
             for ( ; getline(topfile, line); ) {
                 lineNumber++;
@@ -98,6 +100,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         // Load molecule name into MoleculeTypes from [ moleculetype ],
         // which should be before any [ atoms ], [ bonds ], [ angles ], .....
         if (line == "[ moleculetype ]") {
+	    std::cout<<"Enter the moleculetype part"<<std::endl;
             moleculetypeTag = true;
             for ( ; getline(topfile, line); ) {
                 lineNumber++;
@@ -117,6 +120,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         // on, are belong to current [ moleculetype ] that before them.
         // Load charge of atom into Atoms from [ atoms ].
         if (line == "[ atoms ]") {
+	    std::cout<<"Enter the atoms part"<<std::endl;
             atomsTag = true;
             if (!moleculetypeTag)
                 throw std::runtime_error("ERROR: [ atoms ] has to be after [ moleculetype ].");
@@ -137,6 +141,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         }
         // Load Harmonic bond parameters into Bonds from [ bonds ].
         if (line == "[ bonds ]") {
+	    std::cout<<"Enter the bonds part"<<std::endl;
             if (!moleculetypeTag)
                 throw std::runtime_error("ERROR: [ bonds ] has to be after [ moleculetype ].");
             for ( ; getline(topfile, line); ) {
@@ -156,6 +161,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         }
         // Load Harmonic angle parameters into Angles from [ Angles ].
         if (line == "[ angles ]") {
+	    std::cout<<"Enter the angles part"<<std::endl;
             if (!moleculetypeTag)
                 throw std::runtime_error("ERROR: [ angles ] has to be after [ moleculetype ].");
             for ( ; getline(topfile, line); ) {
@@ -178,6 +184,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         }
         // Load dihedral parameters into Dihedrals from [ dihedrals ].
         if (line == "[ dihedrals ]") {
+	    std::cout<<"Enter the dihedrals part"<<std::endl;
             if (!moleculetypeTag)
                 throw std::runtime_error("ERROR: [ dihedrals ] has to be after [ moleculetype ].");
             for ( ; getline(topfile, line); ) {
@@ -210,6 +217,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         // The nonbonded interactions of these atom pairs should be scaled and
         // excluded from normal nonbonded interactions.
         if (line == "[ pairs ]") {
+	    std::cout<<"Enter the pairs part"<<std::endl;
             if (!moleculetypeTag)
                 throw std::runtime_error("ERROR: [ pairs ] has to be after [ moleculetype ].");
             for ( ; getline(topfile, line); ) {
@@ -304,6 +312,7 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
         }
         // Load Harmonic polars parameters into Polars from [ polars ].
         if (line == "[ polars ]") {
+	    std::cout<<"Enter the polars part"<<std::endl;
             if (!moleculetypeTag)
                 throw std::runtime_error("ERROR: [ polars ] has to be after [ moleculetype ].");
             std::cout<<"Start to Load Harmonic polars parameters into Polars from [ polars ]."<<std::endl;
@@ -326,6 +335,15 @@ void Topology::loadGromacsTopology(std::ifstream& topfile) {
                     moleculeTypes.back().polars.push_back({ 0, fields[1], std::stod(fields[6]) });
                 }
             }
+	      std::cout << "\n----- Polar Parameters Summary -----\n";
+              std::cout << "Total polar parameters: " << moleculeTypes.back().polars.size() << std::endl;
+              for (size_t i = 0; i < moleculeTypes.back().polars.size(); i++) {
+                  const auto& polar = moleculeTypes.back().polars[i];
+                  std::cout << "Polar[" << i << "]: atomType=" << polar.atomType
+                  << ", charge=" << polar.polarizability << std::endl;
+              }
+              std::cout << "-----------------------------------\n";
+
         }
         // Load the new vdw model parameters into NewModel from [ newvdw ].
         if (line == "[ newvdw ]") {
@@ -477,3 +495,28 @@ void Topology::printTopologyInfo() const {
             "\t" << moleculeTypes[molecules[i].moleculeTypeIndex].atoms.size() << "\n";
     std::cout << std::endl;
 }
+
+
+
+std::vector<double> Topology::getPolarizabilityValues() const {
+    std::vector<double> polarizabilities;
+    int number = 0;
+    // Loop through all molecules in the system
+    for (int i = 0; i < molecules.size(); i++) {
+        const Topology::MoleculeTypes& moleculeType = moleculeTypes[molecules[i].moleculeTypeIndex];
+          
+        // For each molecule in the system, add all polarizability values
+        for (int m = 0; m < molecules[i].moleculeNumber; m++) {
+                // Simply add all polarizability values in the order they appear
+                for (int k = 0; k < moleculeType.polars.size(); k++) {
+		      
+                    polarizabilities.push_back(moleculeType.polars[k].polarizability);
+//		    std::cout << "number is " << number << ",  moleculeType.polars[k].polarizability is "<<moleculeType.polars[k].polarizability<<" and "<<polarizabilities[number]<<std::endl;       
+		    number++;
+                }
+         }
+     }
+    std::cout<<"Finish get polarizablity"<<std::endl;
+    return polarizabilities;
+}
+

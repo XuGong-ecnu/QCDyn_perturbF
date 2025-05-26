@@ -104,6 +104,7 @@ void Structure::setAtomInfo(const std::vector<std::string>& atominfo) {
 }
 
 void Structure::setPositions(const std::vector<OpenMM::Vec3>& positions) {
+    std::cout<<"natoms is "<<natoms<<"   and position size is "<<positions.size()<<std::endl;
     if (natoms != 0 && positions.size() != natoms)
         throw std::runtime_error("ERROR: Called setPositions() on a Structure with the wrong number of positions.");
     else if (natoms == 0)
@@ -182,6 +183,7 @@ void Structure::readGROFile(const std::string& file) {
             double px = std::stod(line.substr(20, 8));
             double py = std::stod(line.substr(28, 8));
             double pz = std::stod(line.substr(36, 8));
+	  //  std::cout<<"load position : "<< px << "  "<<py<< "  "<<pz<<std::endl;
             atominfo[lineNumber-3] = atom;
             positions[lineNumber-3] = OpenMM::Vec3(px, py, pz);
             if (hasVel) {

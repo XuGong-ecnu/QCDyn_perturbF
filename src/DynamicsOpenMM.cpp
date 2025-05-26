@@ -8,6 +8,7 @@
  * -------------------------------------------------------------------------- */
 
 #include "DynamicsOpenMM.h"
+#include "ForceFieldPolar.h"
 
 void DynamicsOpenMM::init() {
     DynamicsBase::init();
@@ -41,179 +42,23 @@ void DynamicsOpenMM::dynamics(int steps) {
     this->step += steps;
 }
 
-//add by Xu
-/*
-void DynamicsOpenMM::perturbDynamics(int steps, int perturbStep, int atomIndex, double fx, double fy, double fz) {
-    
-    if (perturbStep < 0 || perturbStep >= steps) {
-        std::cerr << "Warning: perturbStep " << perturbStep << " is outside the range [0," << steps-1 << "]" << std::endl;
-       
-        dynamics(steps);
-        return;
-    }
-    
-    
-    if (perturbStep > 0) {
-        dynamics(perturbStep);
-    }
-
-    
-    static const int propagate_state = param.getInt("propagate_state");
-    
-   
-    ha->updateContextState();
-    ha->getPotentialEnergy(propagate_state, true);
-    ha->getForces();
-    
-    
-    if (atomIndex >= 0 && atomIndex < ha->F.size()) {
-        std::cout << "Applying custom force at step " << step << " to atom " << atomIndex << std::endl;
-        std::cout << "Original force: (" 
-                  << ha->F[atomIndex][0] << ", " 
-                  << ha->F[atomIndex][1] << ", " 
-                  << ha->F[atomIndex][2] << ")" << std::endl;
-        
-        
-        ha->F[atomIndex][0] += fx;
-        ha->F[atomIndex][1] += fy;
-        ha->F[atomIndex][2] += fz;
-        
-        std::cout << "Modified force: (" 
-                  << ha->F[atomIndex][0] << ", " 
-                  << ha->F[atomIndex][1] << ", " 
-                  << ha->F[atomIndex][2] << ")" << std::endl;
-    } else {
-        std::cerr << "Warning: Atom index " << atomIndex 
-                  << " is out of bounds (0-" << ha->F.size()-1 << ")" << std::endl;
-    }
-    
-    
-    if (dyn_type == "OpenMM") { 
-        integrator->oneStep(ha->F);
-    } else { 
-        myOneStep();
-    }
-    
-    
-    this->step += 1;
-    
-    
-    int remainingSteps = steps - perturbStep - 1;
-    if (remainingSteps > 0) {
-        dynamics(remainingSteps);
-    }
-}
-*/
 
 
-/*
-void DynamicsOpenMM::perturbDynamics(int steps, int perturbStep, int atomIndex, double fx, double fy, double fz) {
-    if (perturbStep < 0 || perturbStep >= steps) {
-        std::cerr << "Warning: perturbStep " << perturbStep << " is outside the range [0," << steps-1 << "]" << std::endl;
-        dynamics(steps);
-        return;
-    }
-    
-    
-    if (perturbStep > 0) {
-        dynamics(perturbStep);
-    }
 
-    
-    static const int propagate_state = param.getInt("propagate_state");
-    
-    
-    ha->updateContextState();
-    
-    
-    if (atomIndex == -1) {
-        std::cout << "Applying ForceFieldPolar calculated perturbF at step " << step << " to all atoms" << std::endl;
-        
-        
-        ForceFieldPolar* ffPolar = dynamic_cast<ForceFieldPolar*>(ha->getForceField());
-        if (ffPolar == nullptr) {
-            std::cerr << "Error: ForceField is not of type ForceFieldPolar" << std::endl;
-            return;
-        }
-        
-        
-        ffPolar->calcualtePerturbPolarForce(ha->F);
-        
-        std::cout << "Applied perturbF to all atoms" << std::endl;
-    } 
-    
-    else if (atomIndex >= 0 && atomIndex < ha->F.size()) {
-        std::cout << "Applying custom force at step " << step << " to atom " << atomIndex << std::endl;
-        std::cout << "Original force: (" 
-                  << ha->F[atomIndex][0] << ", " 
-                  << ha->F[atomIndex][1] << ", " 
-                  << ha->F[atomIndex][2] << ")" << std::endl;
-        
-        
-        ha->F[atomIndex][0] += fx;
-        ha->F[atomIndex][1] += fy;
-        ha->F[atomIndex][2] += fz;
-        
-        std::cout << "Modified force: (" 
-                  << ha->F[atomIndex][0] << ", " 
-                  << ha->F[atomIndex][1] << ", " 
-                  << ha->F[atomIndex][2] << ")" << std::endl;
-    } else {
-        std::cerr << "Warning: Atom index " << atomIndex 
-                  << " is out of bounds (0-" << ha->F.size()-1 << ")" << std::endl;
-    }
-    
-    
-    if (dyn_type == "OpenMM") { 
-        integrator->oneStep(ha->F);
-    } else { 
-        myOneStep();
-    }
-    
-    
-    this->step += 1;
-    
-    
-    int remainingSteps = steps - perturbStep - 1;
-    if (remainingSteps > 0) {
-        dynamics(remainingSteps);
-    }
-}
-*/
-
-//new version
-void DynamicsOpenMM::perturbDynamics(int steps, int perturbStep, int forceFieldIndex, double scaleFactor) {
+//add by Xu //new version
+void DynamicsOpenMM::perturbDynamics(int steps, int perturbStep, int forceFieldIndex, double scaleFactor, int pulse_type) {
     const int nsteps = param.getInt("nsteps");
-//    if (perturbStep < 0 || perturbStep >= nsteps) {
-//        std::cerr << "Warning: perturbStep " << perturbStep << " is outside the range [0," << steps-1 << "]" << std::endl;
-//        dynamics(steps);
-//        return;
-//    }
-    
     std::cout << "Will apply perturbation forces from ForceField " << forceFieldIndex 
               << " at step " << (step + perturbStep) 
               << " with scale factor " << scaleFactor << std::endl;
+//    std::cout << "Apply force from ForceFieldPolar "<< std::endl;
+    applyPerturbForces(forceFieldIndex, scaleFactor,pulse_type);
+//    std::cout << "After apply atom force: ("
+//                      << ha->F[0][0] << ", "
+//                      << ha->F[0][1] << ", "
+//                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
     
-    // Run dynamics up to the perturbation step
-//    if (perturbStep > 0) {
-//        dynamics(perturbStep);
-//    }
-    // Apply perturbation forces
-    
-    std::cout << "Apply force from ForceFieldPolar "<< std::endl;
-    
-    applyPerturbForces(forceFieldIndex, scaleFactor);
-    std::cout << "After apply atom force: ("
-                      << ha->F[0][0] << ", "
-                      << ha->F[0][1] << ", "
-                      << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
-    
-    std::cout << "Finish apply force from ForceFieldPolar "<< std::endl;                       
-    // Continue with remaining steps
-//    int remainingSteps = steps - perturbStep - 1;
-//    if (remainingSteps > 0) {
-//        dynamics(remainingSteps);
-//    }
+//    std::cout << "Finish apply force from ForceFieldPolar "<< std::endl;                       
 }
 
 
@@ -257,69 +102,14 @@ void DynamicsOpenMM::myOneStep() {
     }
 }
 
+//add raman perturb F H_int = \Pi_ij Ejk \Pi_ki
 
-// add by xu const f 
-/*
-void DynamicsOpenMM::applyCustomForce(int atomIndex, double fx, double fy, double fz) {
-    
-    static const int propagate_state = param.getInt("propagate_state");
-    ha->updateContextState();
-    ha->getPotentialEnergy(propagate_state, true);
-    ha->getForces();
-    
-    
-    if (atomIndex >= 0 && atomIndex < ha->F.size()) {
-        std::cout << "Applying custom force at step " << step << " to atom " << atomIndex << std::endl;
-        std::cout << "Original force: (" << ha->F[atomIndex][0] << ", " 
-                 << ha->F[atomIndex][1] << ", " 
-                 << ha->F[atomIndex][2] << ")" << std::endl;
-        
-        
-        ha->F[atomIndex][0] += fx;
-        ha->F[atomIndex][1] += fy;
-        ha->F[atomIndex][2] += fz;
-        
-        std::cout << "Modified force: (" << ha->F[atomIndex][0] << ", " 
-                 << ha->F[atomIndex][1] << ", " 
-                 << ha->F[atomIndex][2] << ")" << std::endl;
-    } else {
-        std::cerr << "Warning: Atom index " << atomIndex 
-                  << " is out of bounds (0-" << ha->F.size()-1 << ")" << std::endl;
-    }
-    
-    if (param.getStr("integrator") == "velocityVerlet") {
-        static std::shared_ptr<OpenMM::CompoundIntegrator> compound =
-            std::static_pointer_cast<OpenMM::CompoundIntegrator>(integrator);
-        
-        compound->setCurrentIntegrator(0);
-        compound->oneStep(ha->F);
-        
-        
-        ha->getPotentialEnergy(propagate_state, true);
-        ha->getForces();
-        
-        compound->setCurrentIntegrator(1);
-        compound->oneStep(ha->F);
-        
-        ha->setTime(ha->getTime() - DT);
-        ha->setStep(ha->getStep() - 1);
-    } else {
-        integrator->oneStep(ha->F);
-    }
-}
-*/
-
-
-//add perturb F DKPI
-
-
-
-void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor) {
+void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor, int pulse_type) {
     static const int propagate_state = param.getInt("propagate_state");
  
     ha->updateContextState();
-//    ha->getPotentialEnergy(propagate_state, true);
-//    ha->getKineticEnergy();
+    ha->getPotentialEnergy(propagate_state, true);
+    ha->getKineticEnergy();
     ha->getForces();
     ha->getPositions(); 
     std::vector<OpenMM::Vec3> perturbForces;
@@ -328,7 +118,7 @@ void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor)
     perturbForces.resize(DOFn, OpenMM::Vec3(0.0, 0.0, 0.0));
     double kineticenergy = ha->getKineticEnergy();
 
-    if (ha->getForceFieldForces(perturbForces)) {
+    if (ha->getForceFieldForces(perturbForces, pulse_type)) {
         std::cout << "Applying perturbation forces from ForceField " << forceFieldIndex << std::endl;
         
         
@@ -386,8 +176,8 @@ void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor)
     ha->getForces();
     ha->getPositions();
     ha->getVelocities();
-
-    if (ha->getForceFieldForces(perturbForces)) {
+/*
+    if (ha->getForceFieldForces(perturbForces, pulse_type)) {
         std::cout << "Applying perturbation forces from ForceField " << forceFieldIndex << std::endl;
 
 
@@ -421,7 +211,8 @@ void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor)
                       << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
         }
     }
-    this->step += 1;
+  */  
+//    this->step += 1;
 }   
 
 
@@ -561,4 +352,35 @@ void DynamicsOpenMM::applyPerturbForces(int forceFieldIndex, double scaleFactor)
                       << ha->F[0][2] << ") kJ/mol/nm" << std::endl;
 
 } */ 
+
+
+
+void DynamicsOpenMM::Pi_update() {
+    // Empty implementation that just calculates Pi without storing it
+    std::vector<double> temp_pi(9, 0.0);
+    this->Pi_update(temp_pi);
+}
+
+void DynamicsOpenMM::Pi_update(std::vector<double>& Pi_store) {
+    // Make sure Pi_store has the right size
+    if (Pi_store.size() != 9) {
+        Pi_store.resize(9, 0.0);
+    }
+    
+    // Get position data from the current state
+   // ha->getPositions();  // Make sure positions are up to date
+    
+    // Try to directly access a ForceFieldPolar from the polarForceFields vector
+    if (!ha->polarForceFields.empty()) {
+        ha->getForceFieldForces(Pi_store);
+//	std::cout<<"Pi_store is  " << std::endl
+//                 <<Pi_store[0] << "   " << Pi_store[1] << "   " << Pi_store[2]<<std::endl
+//                 <<Pi_store[3] << "   " << Pi_store[4] << "   " << Pi_store[5]<<std::endl
+//                 <<Pi_store[6] << "   " << Pi_store[7] << "   " << Pi_store[8]<<std::endl;
+
+    } else {
+        // If no ForceFieldPolar is available, throw an exception
+        throw std::runtime_error("ERROR: Pi_update() requires a ForceFieldPolar, but none is available.");
+    }
+}
 

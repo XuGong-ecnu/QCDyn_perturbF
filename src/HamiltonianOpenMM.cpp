@@ -8,7 +8,6 @@
  * -------------------------------------------------------------------------- */
 
 #include "HamiltonianOpenMM.h"
-
 void HamiltonianOpenMM::init() {
 //    polarForceFields.resize(DOFe);
 //    for (int i = 0; i < DOFe; ++i) {
@@ -55,6 +54,7 @@ void HamiltonianOpenMM::init() {
     DOFe = files.size();
     std::vector<Topology> topologies(DOFe);
     for (int i = 0; i < DOFe; ++i) {
+        std::cout << "Start to loadTopologyFile " << CurrentTime() << ".\n" << std::endl;
         topologies[i].loadTopologyFile(files[i]);
         std::cout << "Loaded topology from file: " << files[i] << std::endl;
     }
@@ -118,11 +118,17 @@ void HamiltonianOpenMM::init() {
     // * 6 Get mass of each particle from OpenMM System.
     masses.resize(DOFn, 0);
     inverseMasses.resize(DOFn, 0);
+//    std::cout<<"1. resize alpha"<<std::endl;
+//    alpha_e.resize(DOFn,0.0);
+//    alpha_g.resize(DOFn,0.0);
+//    std::cout<<"2. resize alpha"<<std::endl;
+//    std::vector <double> alpha;
+//    alpha = topologies[0].getPolarizabilityValues();
     for (int j = 0; j < DOFn; j++) {
         masses[j] = system->getParticleMass(j);
         inverseMasses[j] = masses[j] == 0 ? 0 : (1.0/masses[j]);
     }
-
+    std::cout<<"3. resize alpha"<<std::endl;
     // * 7 Do energy minimization (if any) before dynamics.
     // This will update the positions in Context directly, so do it after Context
     // is created. And if it is a restart simulation, this will not to do.
@@ -153,6 +159,8 @@ void HamiltonianOpenMM::init() {
 
     // * 8 Resize all vectors in this class and set their elements to 0.
     // We will update them only when we need.
+    std::cout<<"4. resize alpha"<<std::endl;
+
     PE.resize(DOFe, 0);
     R.resize(DOFn, OpenMM::Vec3());
     V.resize(DOFn, OpenMM::Vec3());
@@ -160,13 +168,21 @@ void HamiltonianOpenMM::init() {
     F_all.resize(DOFe*DOFe, std::vector<OpenMM::Vec3>(DOFn, OpenMM::Vec3()));
     F_avg.resize(DOFn, OpenMM::Vec3());
     
-
-    polarForceFields.resize(DOFe);
-    for (int i = 0; i < DOFe; ++i) {
-        polarForceFields[i] = std::make_shared<ForceFieldPolar>(param);
-        polarForceFields[i]->init();
+    alpha_e.resize(DOFn,0.0);
+    std::vector <double> alpha;
+    alpha = topologies[0].getPolarizabilityValues();
+    alpha_e = alpha;    
+    
+    static const bool perturb = param.getBool("perturb"); 
+    if(perturb == true){
+        polarForceFields.resize(DOFe);
+        std::cout<<"Begin polarForceFields[i]"<<std::endl;
+        for (int i = 0; i < DOFe; ++i) {
+            polarForceFields[i] = std::make_shared<ForceFieldPolar>(param);
+            polarForceFields[i]->init();
+        }
+        std::cout<<"Finsh polarForceFields[i]"<<std::endl;
     }
-
 }
 
 void HamiltonianOpenMM::updateDiabaticHamiltonian() {
@@ -1697,134 +1713,8 @@ int HamiltonianOpenMM::computeSystemDOF() const {
 }
 
 
-/*
-bool HamiltonianOpenMM::getForceFieldForces(int forceFieldIndex, std::vector<OpenMM::Vec3>& perturbForces) {
-    
-    perturbForces.resize(getNumAtoms());
-    
-    
-    ForceFieldBase* ff = getForceField(forceFieldIndex);
-    if (ff == nullptr) {
-        std::cerr << "Error: Cannot find ForceField at index " << forceFieldIndex << std::endl;
-        return false;
-    }
-    
-    
-    ForceFieldPolar* ffPolar = dynamic_cast<ForceFieldPolar*>(ff);
-    if (ffPolar == nullptr) {
-        std::cerr << "Error: ForceField at index " << forceFieldIndex << " is not of type ForceFieldPolar" << std::endl;
-        return false;
-    }
-   
-    std::vector<Vec3> convertedForces;
-
-    convertedForces.reserve(perturbForces.size());
-    for (const auto& force : perturbForces) {
-        convertedForces.push_back(Vec3(force[0], force[1], force[2]));
-    }
-    bool success = ffPolar->calcualtePerturbPolarForce(convertedForces);
-
-
-
- 
-//    bool success = ffPolar->calcualtePerturbPolarForce(perturbForces);
-    
-    if (!success) {
-        std::cerr << "Error: Failed to calculate perturbation forces" << std::endl;
-        return false;
-    }
-    
-    return true;
-}*/
-
-//version 2
-/*
-bool HamiltonianOpenMM::getForceFieldForces(int forceFieldIndex, std::vector<OpenMM::Vec3>& perturbForces) {
-   
-    perturbForces.resize(getNumAtoms());
-    
-    
-    ForceFieldBase* ff = getForceField(forceFieldIndex);
-    if (ff == nullptr) {
-        std::cerr << "Error: Cannot find ForceField at index " << forceFieldIndex << std::endl;
-        return false;
-    }
-    
-    
-    ForceFieldPolar* ffPolar = dynamic_cast<ForceFieldPolar*>(ff);
-    if (ffPolar == nullptr) {
-        std::cerr << "Error: ForceField at index " << forceFieldIndex << " is not of type ForceFieldPolar" << std::endl;
-        return false;
-    }
-    
-    
-    std::vector<Vec3> convertedForces(getNumAtoms(), Vec3(0, 0, 0));
-    
-    
-    ffPolar->calcualtePerturbPolarForce(convertedForces);
-    
-    
-    for (size_t i = 0; i < convertedForces.size() && i < perturbForces.size(); ++i) {
-        perturbForces[i] = OpenMM::Vec3(convertedForces[i][0], 
-                                       convertedForces[i][1], 
-                                       convertedForces[i][2]);
-    }
-    
-    return true;
-}
-
-
-
-
-
-
-ForceFieldBase* HamiltonianOpenMM::getForceField(int index) {
-   
-    HamiltonianForceFieldBase* ffBase = dynamic_cast<HamiltonianForceFieldBase*>(this);
-    if (ffBase != nullptr && index >= 0 && index < ffBase->FFList.size()) {
-        return ffBase->FFList[index].get();
-    }
-       
-    return nullptr;
-}
-*/
-
-// version3 
-/*
-bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbForces) {
-    int activeState = 0;  
-    try {
-        activeState = param.getInt("propagate_state");
-    } catch (...) {
-    }
-    
-    if (activeState < 0 || activeState >= polarForceFields.size()) {
-        std::cerr << "Error: Invalid state index: " << activeState << std::endl;
-        return false;
-    }
-    
-    auto ffPolar = polarForceFields[activeState];
-    if (!ffPolar) {
-        std::cerr << "Error: ForceField at state " << activeState << " is not initialized" << std::endl;
-        return false;
-    }
-    
-    std::vector<Vec3> tempForces(DOFn, Vec3(0, 0, 0));
-    ffPolar->calcualtePerturbPolarForce(tempForces);
-    
-    perturbForces.resize(tempForces.size());
-    for (size_t i = 0; i < tempForces.size(); ++i) {
-        perturbForces[i] = OpenMM::Vec3(tempForces[i][0], 
-                                       tempForces[i][1], 
-                                       tempForces[i][2]);
-    }
-    
-    return true;
-}
-*/
-
-
-bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbForces) {
+// added by xu which is to get the raman perturb F
+bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbForces, int pulse_type) {
     try {
         int activeState = 0;  
         try {
@@ -1832,37 +1722,25 @@ bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbFo
         } catch (...) {
          
         }
-        std::cout<<" activeState is "<< activeState<< std::endl;        
+ //       std::cout<<" activeState is "<< activeState<< std::endl;        
         if (activeState < 0 || activeState >= polarForceFields.size()) {
             std::cerr << "Error: Invalid state index: " << activeState << std::endl;
             return false;
         }
-        std::cout<<" set auto ffPolar polarForceFields[activeState] "<< std::endl;
+//        std::cout<<" set auto ffPolar polarForceFields[activeState] "<< std::endl;
         auto ffPolar = polarForceFields[activeState];
-        std::cout<<" Finsh set auto ffPolar polarForceFields[activeState] "<< std::endl;
+//        std::cout<<" Finsh set auto ffPolar polarForceFields[activeState] "<< std::endl;
         if (!ffPolar) {
             std::cerr << "Error: ForceField at state " << activeState << " is not initialized" << std::endl;
             return false;
         }
         
         std::vector<Vec3> tempForces(DOFn, Vec3(0, 0, 0));
-
+        
         std::vector<Vec3> tempR(DOFn, Vec3(0, 0, 0));
         for (size_t i = 0; i < R.size() && i < tempR.size(); ++i) {
             tempR[i] = Vec3(R[i][0], R[i][1], R[i][2]);
         }
-   
-
-//        std::cout<<"R 0 : " <<R[0]<<std::endl;
-//        std::cout<<"R 0 : " <<R[1]<<std::endl;
-//        std::cout<<"R 0 : " <<R[2]<<std::endl;
-//        std::cout<<"R 0 : " <<R[3]<<std::endl;
-//        std::cout<<"R 0 : " <<R[4]<<std::endl;
-//        std::cout<<"tempR 0 : " <<tempR[0]<<std::endl;
-//        std::cout<<"tempR 0 : " <<tempR[1]<<std::endl;
-//        std::cout<<"tempR 0 : " <<tempR[2]<<std::endl;
-//        std::cout<<"tempR 0 : " <<tempR[3]<<std::endl;
-//        std::cout<<"tempR 0 : " <<tempR[4]<<std::endl;
         Vec3 periodicBoxVectors_openmm[3] = {
             Vec3(0, 0, 0),
             Vec3(0, 0, 0),
@@ -1871,15 +1749,13 @@ bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbFo
  
         OpenMM::Vec3 a, b, c;
         getPeriodicBoxVectors(a, b, c);  
-//        std::cout<<"getPeriodicBoxVectors"<<a<<" , "<<b<<" , "<<c<<std::endl;
         periodicBoxVectors_openmm[0] = Vec3(a[0], a[1], a[2]);
         periodicBoxVectors_openmm[1] = Vec3(b[0], b[1], b[2]);
         periodicBoxVectors_openmm[2] = Vec3(c[0], c[1], c[2]);
-//        std::cout<<"periodicBoxVectors_openmm"<<periodicBoxVectors_openmm[0]<<" , "<<periodicBoxVectors_openmm[1]<<" , "<<periodicBoxVectors_openmm[2]<<std::endl;
-//        std::cout<<" start calcualtePerturbPolarForce(tempForces) "<< std::endl;
-        ffPolar->calculatePerturbPolarForce_openmm(tempForces,tempR,periodicBoxVectors_openmm);
-//        std::cout<<" Finsh calcualtePerturbPolarForce(tempForces) "<< std::endl;
-        perturbForces.resize(tempForces.size());
+	std::cout<<"Start to calculatePerturbPolarForce_openmm(tempForces,tempR,periodicBoxVectors_openmm, pulse_type)"<<std::endl;
+        ffPolar->calculatePerturbPolarForce_openmm(tempForces,tempR,alpha_e,periodicBoxVectors_openmm, pulse_type);
+        std::cout<<"End to calculatePerturbPolarForce_openmm(tempForces,tempR,periodicBoxVectors_openmm, pulse_type)"<<std::endl;
+	perturbForces.resize(tempForces.size());
         for (size_t i = 0; i < tempForces.size(); ++i) {
             perturbForces[i] = OpenMM::Vec3(tempForces[i][0], 
                                            tempForces[i][1], 
@@ -1897,7 +1773,50 @@ bool HamiltonianOpenMM::getForceFieldForces(std::vector<OpenMM::Vec3>& perturbFo
 }
 
 
+void HamiltonianOpenMM::getForceFieldForces(std::vector<double>& Pi) {
+        int activeState = 0;
+        try {
+            activeState = param.getInt("propagate_state");
+        } catch (...) {
 
+        }
+        auto ffPolar = polarForceFields[activeState];
+        Vec3 periodicBoxVectors_openmm[3] = {
+            Vec3(0, 0, 0),
+            Vec3(0, 0, 0),
+            Vec3(0, 0, 0)
+        };
+
+        OpenMM::Vec3 a, b, c;
+        getPeriodicBoxVectors(a, b, c);
+        periodicBoxVectors_openmm[0] = Vec3(a[0], a[1], a[2]);
+        periodicBoxVectors_openmm[1] = Vec3(b[0], b[1], b[2]);
+        periodicBoxVectors_openmm[2] = Vec3(c[0], c[1], c[2]);
+        
+        std::vector<double>  Pi_all;
+        Pi.resize(9);
+        Pi_all.resize(DOFn * 9);
+        updateContextState();
+	getPositions();
+        std::vector<Vec3> tempR(DOFn, Vec3(0, 0, 0));
+        for (size_t i = 0; i < R.size() && i < tempR.size(); ++i) {
+            tempR[i] = Vec3(R[i][0], R[i][1], R[i][2]);
+//	    if (i == 0 ){std::cout << tempR[i][0]<<","<<tempR[i][1]<<","<<tempR[i][2]<<std::endl;}	    
+        }	
+//	std::cout<< "Pi_update_Start to calculate the Pi"<<std::endl;
+//        auto start = std::chrono::high_resolution_clock::now();
+        ffPolar-> Pi_tensor_openmm(Pi_all, Pi, alpha_e, tempR,periodicBoxVectors_openmm);
+//	auto end = std::chrono::high_resolution_clock::now();
+//        std::chrono::duration<double> elapsedTime = end - start;
+//        std::cout << "The total elapsed time is " << std::fixed << std::setprecision(3) <<
+//            elapsedTime.count()  << " seconds.\n";
+//	std::cout<< "Pi_update_End to calculate the Pi"<<std::endl;
+//	std::cout<<"Pi is  " << std::endl
+//		 <<Pi[0] << "   " << Pi[1] << "   " << Pi[2]<<std::endl
+//		 <<Pi[3] << "   " << Pi[4] << "   " << Pi[5]<<std::endl
+//		 <<Pi[6] << "   " << Pi[7] << "   " << Pi[8]<<std::endl;
+	
+}
 
 
 

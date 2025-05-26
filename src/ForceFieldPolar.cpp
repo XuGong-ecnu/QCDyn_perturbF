@@ -14,13 +14,11 @@ void ForceFieldPolar::init() {
     // * 1 Initialize data members and Hamiltonian.
     ForceFieldBase::init();
    
-    std::cout<<"this is the force field polar part"<<std::endl;
     // * 2 choose whitch TTM0, TTM1, TTM2, TTM3, TTM4
     damping_type = param.getStr("damping_type");
     forcefield_type = param.getStr("forcefield_type");
     iter_max = param.getInt("iter_max");
     TOLERANCE = param.getDouble("TOLERANCE");
-    std::cout<<"Start setForceFieldPolarParameters()"<<std::endl;
     setForceFieldPolarParameters();
     Mu_all.resize(DOFn * 3);
     Pi_all.resize(DOFn * 9);
@@ -2168,14 +2166,10 @@ void ForceFieldPolar::Pi_tensor_openmm(std::vector<double>& iPi_all, std::vector
     double tol(1); //tolerance
     
     double alpha[DOFn]; //assign single molecular polarizability
-//    std::cout<<"Start to assign single molecular polarizability"<<std::endl;
-//    std::cout<<"DOFn is "<<DOFn<<std::endl;
+
     for (int i = 0; i < DOFn; i++) {
-    //    alpha[i] = ffPolars[i].alpha/1000.0;
           alpha[i] = 0.00163;
     }
-//    std::cout<< "alpha[0] is "<<ffPolars[0].alpha/1000.0<<"       ""alpha[80] is "<<ffPolars[80].alpha/1000.0<<std::endl;   
- 
     for (int i = 0; i < DOFn; i++) { // initial guess as zero-order alpha
         pi2[i * 9 + 0] = pi2[i * 9 + 4] = pi2[i * 9 + 8] = alpha[i];
         pi2[i * 9 + 1] = pi2[i * 9 + 2] = pi2[i * 9 + 3] = pi2[i * 9 + 5] = pi2[i * 9 + 6] = pi2[i * 9 + 7] = 0;
@@ -2209,6 +2203,172 @@ void ForceFieldPolar::Pi_tensor_openmm(std::vector<double>& iPi_all, std::vector
 //        std::cout<<"atom 0 R is "<<R_openmm[1]<<std::endl;
 //        std::cout<<"atom 0 R is "<<R_openmm[2]<<std::endl;
 //        std::cout<<"periodicBoxVectors"<<periodicBoxVectors_openmm[0]<<", "<<periodicBoxVectors_openmm[1]<<", "<<periodicBoxVectors_openmm[2]<<std::endl;        
+        //start new iteration for pi2[i=1...N][9]
+        for (int i = 0; i < DOFn; i++) {
+            for (int j = 0; j < DOFn; j++) {
+                if (i == j) continue;
+                //calculate Tij
+                double deltaR[5];
+                double rm1, rm2, rm3, rm5;
+                const Vec3& atomCoordinatesI = R_openmm[i];
+                const Vec3& atomCoordinatesJ = R_openmm[j];
+                // get deltaR 2 atoms, deltaR = Ri - Rj
+                
+//              GetDeltaRPeriodic(atomCoordinatesJ, atomCoordinatesI, periodicBoxVectors_openmm, deltaR);
+                Vec3 diff = atomCoordinatesJ-atomCoordinatesI;
+                diff[2] = diff[2]-periodicBoxVectors_openmm[2][2]*floor(diff[2]/periodicBoxVectors_openmm[2][2]+0.5);
+                diff[1] = diff[1]-periodicBoxVectors_openmm[1][1]*floor(diff[1]/periodicBoxVectors_openmm[1][1]+0.5);
+                diff[0] = diff[0]-periodicBoxVectors_openmm[0][0]*floor(diff[0]/periodicBoxVectors_openmm[0][0]+0.5);
+
+                deltaR[0] = diff[0];
+                deltaR[1] = diff[1];
+                deltaR[2] = diff[2];
+                deltaR[3] = diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2];
+                deltaR[4] = sqrt(deltaR[3]);
+//                if (i==0&&j==1){std::cout<<"deltaR for atom0 to atom1 is "<<deltaR[0]<<", "<<deltaR[1]<<", "<<deltaR[2]<<", "<<deltaR[3]<<", "<<deltaR[4]<<std::endl;}
+                rm1 = 1.0 / deltaR[4];
+                rm2 = rm1 * rm1;
+                rm3 = rm1 * rm2;
+                rm5 = rm2 * rm3;
+                double S0r, S1r, S2r, S3r;
+                // choose whitch thole model damping type.
+                if (damping_type == "TTM0") 
+                    TTM0Model(S0r, S1r, S2r, S3r);
+                else if (damping_type == "TTM1") 
+                    TTM1Model(S0r, S1r, S2r, S3r);
+                //else if (damping_type == "TTM2") 
+                //    double alphaEwald, double deltaR, double& S0r, double& S1r, double& S2r, double& S3r) {
+                else {
+                    double alphaij;
+                    alphaij = alpha[i] * alpha[j];
+                    alphaij = pow((double)alphaij,double(1.0/6));            
+                    alphaij = deltaR[4] * 1.0 / alphaij;
+                    // Thole model daming parameter for chosen pair od atom i and j
+                    double dampingParam;
+                    // Judge the pair i, j belong to the 12, 13, 14, or noboned part.
+                    dampingParam = param.getDouble("dampingParam3");
+                    if (bonded12[i].find(j) == bonded12[i].end()||bonded12[j].find(i) == bonded12[j].end()) 
+                        dampingParam = param.getDouble("dampingParam1");;
+                    if (bonded13[i].find(j) == bonded13[i].end()||bonded13[j].find(i) == bonded13[j].end()) 
+                        dampingParam = param.getDouble("dampingParam2");;
+
+                    if (damping_type == "TTM3")
+                        TTM3Model(dampingParam, alphaij, S0r, S1r, S2r, S3r);
+                    else if (damping_type == "TTM4")
+                        TTM4Model(dampingParam, alphaij, S0r, S1r, S2r, S3r);
+                }
+
+                for (int a = 0; a < 3; a++) {
+                    for (int b = 0; b < 3; b++) {                   
+                        Tij[a][b] = 3 * deltaR[a] * deltaR[b] * rm5 * S2r;
+                        if (a == b) {
+                            Tij[a][b] -= rm3 * S1r; 
+                        }
+                    }
+                }
+                
+                //transfrom pi1[i][9] to a matrix m1[3][3]
+                for (int a = 0; a < 3; a++) {
+                    for (int b = 0; b < 3; b++) {
+                        m1[a][b] = pi1[j * 9 + 3 * a + b];
+                    }
+                }
+                
+                MatrixMultiplyPi(Tij, m1, m2);           
+
+                //add matrix m2[3][3] to pi2[i][9]
+                for (int a = 0; a < 3; a++) {
+                    for (int b = 0; b < 3; b++) {
+                        pi2[i * 9 + 3 * a + b] += m2[a][b];
+                    }
+                }
+                
+            }
+            pi2[i * 9 + 0] += 1;
+            pi2[i * 9 + 4] += 1;
+            pi2[i * 9 + 8] += 1;
+            
+            for (int k = 0; k < 9; k++) {
+                pi2[i * 9 + k] *= alpha[i];
+            }
+        }
+        
+        //calculate many-body polarizability Pi[3][3] (sum up i=1...N)
+        for (int a = 0; a < 3; a++) 
+            iPi[a * 3 + 0] = iPi[a * 3 + 1] = iPi[a * 3 + 2] = 0; //initialize result tensor to be 0
+
+        for (int i = 0; i < DOFn; i++) {
+            for (int a = 0; a < 3; a++)
+                for (int b = 0; b < 3; b++) {
+                    iPi[a * 3 + b] += pi2[i * 9 + 3 * a + b];
+                }
+        }
+        //calculate tolerance
+        tol=0;
+
+        for (int a = 0; a < 3; a++) {
+            for (int b = 0; b < 3; b++) {
+                tol += abs(iPi[a * 3 + b] - Pi_prev[a][b]);
+            }
+        }
+    }
+    //save pi_i to Pi_all
+    for (int i = 0; i < DOFn; i++)
+        for (int j = 0; j < 9 ;j++) {
+            iPi_all[i * 9 + j] = pi2[i * 9 + j];
+        }
+}
+
+void ForceFieldPolar::Pi_tensor_openmm(std::vector<double>& iPi_all, std::vector<double>& iPi, std::vector<double>& alpha,  std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]) {
+    // calculate the many-body polarizability as a function of configuration using iteration method
+    // to iter_max order or already converged. Return actual iteration times.
+    double Pi_prev[3][3]={0,0,0,0,0,0,0,0,0};
+    double Tij[3][3]={0,0,0,0,0,0,0,0,0};
+    double m1[3][3]={0,0,0,0,0,0,0,0,0};  //for swap matrix
+    double m2[3][3]={0,0,0,0,0,0,0,0,0};  //for swap matrix
+    std::vector<double> pi1, pi2;
+    pi1.resize(DOFn * 9); //old
+    pi2.resize(DOFn * 9); //new
+    double tol(1); //tolerance
+    
+   // double alpha[DOFn]; //assign single molecular polarizability
+    
+    for (int i = 0; i < DOFn; i++) { // initial guess as zero-order alpha
+        pi2[i * 9 + 0] = pi2[i * 9 + 4] = pi2[i * 9 + 8] = alpha[i];
+        pi2[i * 9 + 1] = pi2[i * 9 + 2] = pi2[i * 9 + 3] = pi2[i * 9 + 5] = pi2[i * 9 + 6] = pi2[i * 9 + 7] = 0;
+    }
+//    for (int i = 0; i < std::min(5, DOFn); i++) {
+//    std::cout << "particle" << i << ": element=[" << pi2[i*9+0] << ", " 
+//              << pi2[i*9+4] << ", " << pi2[i*9+8] << "]"<< std::endl;
+//    }    
+
+
+
+    std::vector<std::set<int> > bonded12(DOFn); 
+    std::vector<std::set<int> > bonded13(DOFn);
+    if (damping_type == "TTM3"||damping_type == "TTM4") {
+        addTholeExclusionsToSet(bonded12, bonded13);
+    }
+
+    int n(0);  //iteration count
+
+    while ( tol > TOLERANCE && n < iter_max ) {
+        n++;
+        //save Pi_prev<=Pi
+        for (int a = 0; a < 3; a++) {
+            for (int b = 0; b < 3; b++) {
+                Pi_prev[a][b] = iPi[3 * a + b];
+            }
+        }
+        
+        //save (old) pi1 <= (new) pi2, and set pi2 zero
+        for (int i = 0; i < DOFn; i++) {
+            for (int k = 0; k < 9; k++) {
+                pi1[i * 9 + k] = pi2[i * 9 + k];
+                pi2[i * 9 + k] = 0;
+            }
+        }
+  
         //start new iteration for pi2[i=1...N][9]
         for (int i = 0; i < DOFn; i++) {
             for (int j = 0; j < DOFn; j++) {
@@ -2526,6 +2686,200 @@ void ForceFieldPolar::Dk_Pi_tensor_openmm(int k, std::vector<double>& iPi_all,
     }
 }
 
+void ForceFieldPolar::Dk_Pi_tensor_openmm(int k, std::vector<double>& iPi_all,
+                 std::vector<double>& Tij_all, std::vector<double>& alpha, int conf_diff, std::vector<double>& DkPi, std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]) {
+    //subroutine to calculate partial derivative of the total polairzibility tensor_ab (3*3)
+    //with respect to particular rk_u(3), output is (3*3*3) dimensional DkPi[27].
+    //e.g.
+    //for (a=0; a<3; a++)
+    //    for (b=0; b<3; b++)
+    //        for (u=0; u<3; u++) Pi_dot[3*a+b] = DkPi[9*a+3*b+u] * V[k][u];
+    
+    int n_iter(0);
+    
+    double DkPi_prev[27]; //old DkPi
+
+    std::vector<double> Dkpi1, Dkpi2, DkTkj, DkTik;
+    Dkpi1.resize(DOFn * 27);
+    Dkpi2.resize(DOFn * 27);
+    DkTkj.resize(DOFn * 27);
+    DkTik.resize(DOFn * 27);
+
+    double tol(1); //tolerance
+    double Tij[3][3]={0,0,0,0,0,0,0,0,0};
+    double DkTij[27];
+    
+  
+
+    std::vector<std::set<int> > bonded12(DOFn); 
+    std::vector<std::set<int> > bonded13(DOFn);
+    if (damping_type == "TTM3"||damping_type == "TTM4") {
+        addTholeExclusionsToSet(bonded12, bonded13);
+    }
+
+    //set Dk_Pi =0
+    for (int i = 0; i < 27; i++) DkPi[i] = DkPi_prev[i] = 0;
+    
+    //initial guess of the Dkpi2
+    for (int i = 0; i < DOFn; i++)
+        for (int a = 0; a < 3; a++)
+            for (int b = 0; b < 3; b++)
+                for (int u = 0; u < 3; u++) {
+                    if (a==b && b==u) {
+                        Dkpi2[27 * i + 9 * a + 3 * b + u] = 0; //1
+                    } 
+                    else { 
+                        Dkpi2[27 * i + 9 * a + 3 * b + u] = 0;
+                    }
+                }
+    
+    //calculate Tij_all
+    if (conf_diff == 1) {
+        for (int i = 0; i < DOFn ; i++)
+            for (int j = 0; j < DOFn ; j++) {
+                if (i == j) { //Tii=0
+                    for (int m = 0; m < 9; m++) 
+                        Tij_all[9 * DOFn * i + 9 * j + m] = 0;
+                    continue;
+                }
+                //calculate Tij
+                double deltaR[5];
+                double rm1, rm2, rm3, rm5;
+                const Vec3& atomCoordinatesI = R_openmm[i];
+                const Vec3& atomCoordinatesJ = R_openmm[j];
+                // get deltaR 2 atoms, deltaR = Ri - Rj
+                //GetDeltaRPeriodic(atomCoordinatesJ, atomCoordinatesI, periodicBoxVectors_openmm, deltaR);
+                Vec3 diff = atomCoordinatesJ-atomCoordinatesI;
+                diff[2] = diff[2]-periodicBoxVectors_openmm[2][2]*floor(diff[2]/periodicBoxVectors_openmm[2][2]+0.5);
+                diff[1] = diff[1]-periodicBoxVectors_openmm[1][1]*floor(diff[1]/periodicBoxVectors_openmm[1][1]+0.5);
+                diff[0] = diff[0]-periodicBoxVectors_openmm[0][0]*floor(diff[0]/periodicBoxVectors_openmm[0][0]+0.5);
+
+                deltaR[0] = diff[0];
+                deltaR[1] = diff[1];
+                deltaR[2] = diff[2];
+                deltaR[3] = diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2];
+                deltaR[4] = sqrt(deltaR[3]);
+
+                rm1 = 1.0 / deltaR[4];
+                rm2 = rm1 * rm1;
+                rm3 = rm1 * rm2;
+                rm5 = rm2 * rm3;
+                double S0r, S1r, S2r, S3r;
+                // choose whitch thole model damping type.
+                if (damping_type == "TTM0") 
+                    TTM0Model(S0r, S1r, S2r, S3r);
+                else if (damping_type == "TTM1") 
+                    TTM1Model(S0r, S1r, S2r, S3r);
+                //else if (damping_type == "TTM2") 
+                //    double alphaEwald, double deltaR, double& S0r, double& S1r, double& S2r, double& S3r) {
+                else {
+                    double alphaij;
+                    alphaij = alpha[i] * alpha[j];
+                    alphaij = pow((double)alphaij,double(1.0/6));            
+                    alphaij = deltaR[4] * 1.0 / alphaij;
+                    // Thole model daming parameter for chosen pair od atom i and j
+                    double dampingParam;
+                    // Judge the pair i, j belong to the 12, 13, 14, or noboned part.
+                    dampingParam = param.getDouble("dampingParam3");
+                    if (bonded12[i].find(j) == bonded12[i].end()||bonded12[j].find(i) == bonded12[j].end()) 
+                        dampingParam = param.getDouble("dampingParam1");;
+                    if (bonded13[i].find(j) == bonded13[i].end()||bonded13[j].find(i) == bonded13[j].end()) 
+                        dampingParam = param.getDouble("dampingParam2");;
+
+                    if (damping_type == "TTM3")
+                        TTM3Model(dampingParam, alphaij, S0r, S1r, S2r, S3r);
+                    else if (damping_type == "TTM4")
+                        TTM4Model(dampingParam, alphaij, S0r, S1r, S2r, S3r);
+                }
+                for (int a = 0; a < 3; a++) {
+                    for (int b = 0; b < 3; b++) {                   
+                        Tij[a][b] = 3 * deltaR[a] * deltaR[b] * rm5 * S2r;
+                        if (a == b) {
+                            Tij[a][b] -= Delta(a,b) * rm3 * S1r; 
+                        }
+                    }
+                }
+                for (int a = 0; a < 3; a++)
+                    for (int b = 0; b < 3; b++) {
+                        Tij_all[9 * DOFn * i + 9 * j + 3 * a + b] = Tij[a][b];
+                    }
+            }
+    }
+    
+    //calculate DkTkj (fixed k, j=0,...N-1)
+    for (int j = 0; j < DOFn; j++) {
+        Dk_Tij_tensor_openmm(k, k, j, DkTij, alpha, R_openmm, periodicBoxVectors_openmm);
+        for (int a = 0; a < 27 ; a++) DkTkj[27 * j + a] = DkTij[a];
+    }
+    
+    //calculate DkTik (fixed k, i=0,...N-1)
+    for (int i = 0; i < DOFn ;i++) {
+        Dk_Tij_tensor_openmm(k, i, k, DkTij, alpha, R_openmm, periodicBoxVectors_openmm);
+        for (int a = 0; a < 27; a++) DkTik[27 * i + a] = DkTij[a];
+    }
+    
+    //************ iterative calculation of Dkpi1 or 2 ****************
+    while ( tol > TOLERANCE && n_iter < iter_max ) {
+        //save DkPi_prev <= Dkpi
+        for (int m = 0; m < 27; m++) DkPi_prev[m] = DkPi[m];
+        
+        //Dkpi1 << Dkpi2, and set Dkpi2=0
+        for (int i = 0; i < DOFn; i++)
+            for (int m = 0; m < 27; m++) {
+                Dkpi1[27 * i + m] = Dkpi2[27 * i + m];
+                Dkpi2[27 * i + m] = 0;
+            }
+        
+        //start new iteration
+        n_iter++;
+        for (int i = 0; i < DOFn; i++ ){
+            if (i == k) {
+                for (int j = 0; j < DOFn; j++) {
+                    if (j == k) continue;
+                    for (int a = 0; a < 3; a++)
+                        for (int b = 0; b < 3; b++)
+                            for (int u = 0; u < 3; u++)
+                                for (int c = 0; c < 3; c++)
+                                    Dkpi2[27 * i + 9 * a + 3 * b + u] +=
+                                    DkTkj[27 * j + 9 * a + 3 * c + u] * iPi_all[9 * j + 3 * c + b]
+                                    + Tij_all[9 * DOFn * i + 9 * j + 3 * a + c] * Dkpi1 [27 * j + 9 * c + 3 * b + u];
+                }
+                for (int m = 0; m < 27; m++) 
+                    Dkpi2[27 * i + m] *= alpha[i];
+            }
+            else { // i!=k
+                for (int u = 0; u < 3; u++)
+                    for (int a = 0; a < 3; a++)
+                        for (int b = 0; b < 3; b++)
+                            for (int c = 0; c < 3; c++) {
+                                Dkpi2[27 * i + 9 * a + 3 * b + u] +=
+                                DkTik[27 * i + 9 * a + 3 * c + u] * iPi_all[9 * k + 3 * c + b];
+                                for (int j = 0; j < DOFn; j++) {
+                                    if (j == i) continue;
+                                    Dkpi2[27 * i + 9 * a + 3 * b + u] += Tij_all[9 * DOFn * i + 9 * j + 3 * a + c]
+                                    * Dkpi1[27 * j + 9 * c + 3 * b + u];
+                                }
+                            }
+                for (int m = 0; m < 27; m++) 
+                    Dkpi2[27 * i + m] *= alpha[i];
+            }
+        }
+        
+        //set DkPi[27]=0
+        for (int m = 0; m < 27; m++) DkPi[m] = 0;
+        
+        //sum of i to get new DkPi
+        for (int i = 0; i < DOFn; i++)
+            for (int m = 0; m < 27; m++) DkPi[m] += Dkpi2[27 * i + m];
+        
+        //calculate tolerance
+        tol = 0;
+        for (int m = 0; m < 27 * DOFn; m++) 
+            tol += abs(Dkpi2[m] - Dkpi1[m]);
+    }
+}
+
+
 
 void ForceFieldPolar::Dk_Tij_tensor_openmm(int k, int i, int j, double DkTij[27], std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]) {
 
@@ -2611,9 +2965,86 @@ void ForceFieldPolar::Dk_Tij_tensor_openmm(int k, int i, int j, double DkTij[27]
 }
 
 
-void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& forces, std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]) {
-//    std::cout<<"start to using ForceFieldPolar::calcualtePerturbPolarForce(std::vector<Vec3>& forces): "<<std::endl<<
-//               "The First forces is "<< forces[0][0]<< "  "<<forces[0][1]<< "  "<<forces[0][2]<<std::endl;
+void ForceFieldPolar::Dk_Tij_tensor_openmm(int k, int i, int j, double DkTij[27], std::vector <double>& alpha, std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3]) {
+
+    std::vector<std::set<int> > bonded12(DOFn); 
+    std::vector<std::set<int> > bonded13(DOFn);
+    if (damping_type == "TTM3"||damping_type == "TTM4") {
+        addTholeExclusionsToSet(bonded12, bonded13);
+    }
+
+
+    if ((k != i && k != j) || i == j) {
+        for (int m = 0; m < 27 ;m++) DkTij[m] = 0;
+        return;
+    }
+    
+    if (i != j) {
+        double deltaR[5];
+        const Vec3& atomCoordinatesI = R_openmm[i];
+        const Vec3& atomCoordinatesJ = R_openmm[j];
+        // get deltaR 2 atoms, deltaR = Ri - Rj
+       // GetDeltaRPeriodic(atomCoordinatesJ, atomCoordinatesI, periodicBoxVectors_openmm, deltaR);
+        Vec3 diff = atomCoordinatesJ-atomCoordinatesI;
+                diff[2] = diff[2]-periodicBoxVectors_openmm[2][2]*floor(diff[2]/periodicBoxVectors_openmm[2][2]+0.5);
+                diff[1] = diff[1]-periodicBoxVectors_openmm[1][1]*floor(diff[1]/periodicBoxVectors_openmm[1][1]+0.5);
+                diff[0] = diff[0]-periodicBoxVectors_openmm[0][0]*floor(diff[0]/periodicBoxVectors_openmm[0][0]+0.5);
+
+                deltaR[0] = diff[0];
+                deltaR[1] = diff[1];
+                deltaR[2] = diff[2];
+                deltaR[3] = diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2];
+                deltaR[4] = sqrt(deltaR[3]);
+
+        double rm1, rm2, rm3, rm5, rm7;    
+        rm1 = 1.0 / deltaR[4];
+        rm2 = rm1 * rm1;
+        rm3 = rm1 * rm2;
+        rm5 = rm2 * rm3;
+        rm7 = rm5 * rm2;
+        double alphaij;
+        double S0r, S1r, S2r, S3r;
+        // choose whitch thole model damping type.
+        if (damping_type == "TTM0") 
+            TTM0Model(S0r, S1r, S2r, S3r);
+        else if (damping_type == "TTM1") 
+            TTM1Model(S0r, S1r, S2r, S3r);
+        //else if (damping_type == "TTM2") 
+        //    double alphaEwald, double deltaR, double& S0r, double& S1r, double& S2r, double& S3r) {
+        else {
+        // Thole model daming parameter for chosen pair od atom i
+            double dampingParam;
+            alphaij = alpha[i] * alpha[j];
+            alphaij = pow((double)alphaij,double(1.0/6));            
+            alphaij = deltaR[4] * 1.0 / alphaij;
+            // Judge the pair i, j belong to the 12, 13, 14, or noboned part.
+            dampingParam = param.getDouble("dampingParam3");
+            if (bonded12[i].find(j) == bonded12[i].end()||bonded12[j].find(i) == bonded12[j].end()) 
+                dampingParam = param.getDouble("dampingParam1");;
+                if (bonded13[i].find(j) == bonded13[i].end()||bonded13[j].find(i) == bonded13[j].end()) 
+                    dampingParam = param.getDouble("dampingParam2");;
+                if (damping_type == "TTM3")
+                    TTM3Model(dampingParam, alphaij, S0r, S1r, S2r, S3r);
+                else if (damping_type == "TTM4")
+                    TTM4Model(dampingParam, alphaij, S0r, S1r, S2r, S3r);
+        }
+            
+        for (int a = 0; a < 3; a++)
+            for (int b = 0; b < 3;b++)
+                for (int c = 0; c < 3; c++) {
+                DkTij[9 * a + 3 * b + c] = (Delta(k, i) - Delta(k, j)) *
+                    ( 3 * (deltaR[a] * Delta(b, c) + deltaR[b] * Delta(a, c) + deltaR[c] * Delta(a, b)) * rm5 * S2r
+                    - 15 * deltaR[a] * deltaR[b] * deltaR[c] * rm7 * S3r);
+                }
+    } 
+    else {
+        std::cout << "Dk_Tij_tensor error (i==j)." << std::endl;
+    }
+}
+
+
+void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& forces, std::vector<Vec3>& R_openmm, const Vec3 (&periodicBoxVectors_openmm)[3], int pulse_type) {
+
     std::vector<Vec3> perturbforce;
     perturbforce.resize(DOFn, Vec3(0.0,0.0,0.0));
     int conf_diff;
@@ -2623,50 +3054,30 @@ void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& force
     iPi_all.resize(DOFn * 9);
     Tij_all.resize(DOFn * DOFn * 9);
     DkPi.resize(27);
-    DPi.resize(DOFn * 27);
-    if (iPi_all.size() < DOFn * 9 || iPi.size() < 9) {
-        std::cerr << "Error: Invalid vector sizes in Pi_tensor. "
-                  << "iPi_all.size()=" << iPi_all.size() 
-                  << " (expected " << DOFn * 9 << "), "
-                  << "iPi.size()=" << iPi.size() 
-                  << " (expected at least 9)" << std::endl;
-        return;
-    }
+    DPi.resize(DOFn * 27);    
+   
     
-   
-    if (Pi_all.empty() || Pi_all.size() < DOFn * 9) {
-        std::cerr << "Error: Pi_all not properly initialized" << std::endl;
-        return;
-    }   
+    std::cout<<"Stat to calculate Pi_tensor at time "<<CurrentTime()<<std::endl;
 
-
-//    std::cout<<"Finish initilize the parameters"<<std::endl<<"Stat to calculate Pi_tensor"<<std::endl;
-
-    Pi_tensor_openmm(iPi_all, iPi,R_openmm,periodicBoxVectors_openmm);
-//    for(int k=0;k<9;k++){
-//       std::cout<<"Pi is :" <<iPi[k]<<std::endl; 
-//    }
-//    std::cout<<"Finish to calculate Pi_tensor"<<std::endl;
-
+    Pi_tensor_openmm(iPi_all, iPi,R_openmm, periodicBoxVectors_openmm);
+    for(int k=0;k<9;k++){
+       std::cout<<"Pi is :" <<iPi[k]<<std::endl; 
+    }
+    std::cout<<"Finish to calculate Pi_tensor at time "<< CurrentTime() << std::endl;
+    
     conf_diff = 1;
-   
+    std::cout<<"start to calculate DkPi at time "<<CurrentTime()<< std::endl; 
     for (int k = 0; k < DOFn; k++) {
+    //    std::cout<<"calculate DkPi "<< k << std::endl;
         Dk_Pi_tensor_openmm(k, iPi_all, Tij_all, conf_diff, DkPi,R_openmm,periodicBoxVectors_openmm); //Pi_all or Pi_alpha_all
-        
         if (conf_diff == 1) conf_diff = 0;
-
         for (int u = 0; u < 27; u++) DPi[k * 27 + u] = DkPi[u]; //update Deriv of Pi for all atoms
     }
-
-//    for(int k=0;k<135;k++){
-//       if(k%27==0){std::cout<<"atom "<<k<<" is "<<std::endl;}
-//       std::cout<<"Dk is :"<<k<<" : " <<DPi[k]<<std::endl;
-//    }
-    
+    std::cout<<"finish to calculate DkPi at time "<< CurrentTime()<<std::endl;
 
 
 
-    Perturb_Polar_openmm(DPi, perturbforce);
+    Perturb_Polar_openmm(DPi, perturbforce, pulse_type);
 //    std::cout<< "direction is :"<<direction<<std::endl;    
     for (int i = 0; i < DOFn; i++) {
         if (direction) {
@@ -2683,52 +3094,120 @@ void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& force
 }
 
 
-void ForceFieldPolar::Perturb_Polar_openmm(std::vector<double>& DPi, std::vector<Vec3>& perturbforce){
-    //Perturb the system with Raman interaction, VR = - 1/2 E1_mu * Pi_munu * E2_nu (* direction)
-    //result in change of force of atom k, DeltaF(k)_u = - d VR/ d r(k)_u
-    //               =  1/2 E1_mu * d Pi_munu/ dr(k)_u * E2_nu
-    double perturb_fields; //perturb energy (epsilon) = perturb_fields(epsilon/sigma^3)* Pi(sigma^3)
-    // perturb elec size
-    std::vector<int> perturb_parameters;
-    // 0 1 2 3 4 5 6 7 8
-    SplitString(perturb_parameters, param.getStr("perturb_parameters"));
-    int mu, nu;
-    int E1, E2;
-    if (perturb_parameters[5] == 0) {
-        mu = 1;
-        nu = 2;
-        E1 = perturb_parameters[6];
-        E2 = perturb_parameters[7];
-    }
-    else if (perturb_parameters[6] == 0) {
-        mu = 0;
-        nu = 2;
-        E1 = perturb_parameters[5];
-        E2 = perturb_parameters[7];
-    }
-    else if (perturb_parameters[7] == 0) {
-        mu = 0;
-        nu = 1;
-        E1 = perturb_parameters[5];
-        E2 = perturb_parameters[6];
-    }
+void ForceFieldPolar::calculatePerturbPolarForce_openmm(std::vector<Vec3>& forces, std::vector<Vec3>& R_openmm, std::vector<double>& alpha, const Vec3 (&periodicBoxVectors_openmm)[3], int pulse_type) {
 
-    perturb_fields = - 0.5 * E1 * E2 * 1e20 * Fm2 / mol;// unit KJ/(mol*nm)
+    std::vector<Vec3> perturbforce;
+    perturbforce.resize(DOFn, Vec3(0.0,0.0,0.0));
+    int conf_diff;
+    conf_diff = 1;
+    std::vector<double> iPi, iPi_all, Tij_all, DkPi, DPi;
+    iPi.resize(9);
+    iPi_all.resize(DOFn * 9);
+    Tij_all.resize(DOFn * DOFn * 9);
+    DkPi.resize(27);
+    DPi.resize(DOFn * 27);    
+   
     
-    int munu;
-    munu = 9 * mu + 3 * nu;       //refer Pi_dot[3*a+b] += DkPi[9*a+3*b+u] * V[k][u] (for k=0...N-1)
-    for (int k = 0; k < DOFn; k++) {     //atom k
-        for (int u = 0; u < 3; u++) { //x,y,z component for the r(k)_u
-            perturbforce[k][u] -= DPi[27 * k + munu + u] * perturb_fields;  //F = - dV/dr         
+//    std::cout<<"Stat to calculate Pi_tensor at time "<<CurrentTime()<<std::endl;
+
+    Pi_tensor_openmm(iPi_all, iPi, alpha, R_openmm,  periodicBoxVectors_openmm);
+//    for(int k=0;k<9;k++){
+//       std::cout<<"Pi is :" <<iPi[k]<<std::endl; 
+//    }
+//    std::cout<<"Finish to calculate Pi_tensor at time "<< CurrentTime() << std::endl;
+    
+    conf_diff = 1;
+    std::cout<<"start to calculate DkPi at time "<<CurrentTime()<< std::endl; 
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (int k = 0; k < DOFn; k++) {
+    //    std::cout<<"calculate DkPi "<< k << std::endl;
+        Dk_Pi_tensor_openmm(k, iPi_all, Tij_all, alpha, conf_diff, DkPi,R_openmm,periodicBoxVectors_openmm); //Pi_all or Pi_alpha_all
+        if (conf_diff == 1) conf_diff = 0;
+        for (int u = 0; u < 27; u++) DPi[k * 27 + u] = DkPi[u]; //update Deriv of Pi for all atoms
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsedTime = end - start;
+    std::cout<<"finish to calculate DkPi at time "<< CurrentTime()<<std::endl;
+    std::cout << "The total elapsed time is " << std::fixed << std::setprecision(3) <<
+            elapsedTime.count()  << " seconds.\n";
+
+
+    Perturb_Polar_openmm(DPi, perturbforce, pulse_type);
+//    std::cout<< "direction is :"<<direction<<std::endl;    
+    for (int i = 0; i < DOFn; i++) {
+        if (direction) {
+            forces[i][0] += perturbforce[i][0];
+            forces[i][1] += perturbforce[i][1];
+            forces[i][2] += perturbforce[i][2];
+            }
+        else {
+            forces[i][0] -= perturbforce[i][0];
+            forces[i][1] -= perturbforce[i][1];
+            forces[i][2] -= perturbforce[i][2];
         }
     }
-//    std::cout<<"perturbforce on atom 0 is : "<<std::endl; 
-//    std::cout<<"x: " <<perturbforce[0][0]<<std::endl;
-//    std::cout<<"y: " <<perturbforce[0][1]<<std::endl;
-//    std::cout<<"z: " <<perturbforce[0][2]<<std::endl;
 }
 
 
+void ForceFieldPolar::Perturb_Polar_openmm(std::vector<double>& DPi, std::vector<Vec3>& perturbforce, int pulse_type) {
+    //Perturb the system with Raman interaction, VR = - 1/2 E1_mu * Pi_munu * E2_nu (* direction)
+    //result in change of force of atom k, DeltaF(k)_u = - d VR/ d r(k)_u
+    //               =  1/2 E1_mu * d Pi_munu/ dr(k)_u * E2_nu
+    double perturb_fields = 0.0; //perturb energy (epsilon) = perturb_fields(epsilon/sigma^3)* Pi(sigma^3)
+    
+    // Read parameter form inp file
+    std::vector<double> perturb_parameters;
+    SplitString(perturb_parameters, param.getStr("perturb_parameters"));
+    
+    // choose the pulse type
+    int base_index;
+//    std::cout<<"pulse_type is "<<pulse_type<<std::endl;
+    if (pulse_type == 0) {
+        base_index = 5;  // first setting (5,6,7)
+    } else if (pulse_type == 1) {
+        base_index = 8;  // second setting (8,9,10)
+    } else if (pulse_type == 2) {
+        base_index = 11; // third setting (11,12,13)
+    } else {
+        return;
+    }
+    
+    // determine the detete mu, nu, E1, E2
+    int mu, nu;
+    double E1, E2;
+    
+    if (perturb_parameters[base_index] == 0) {
+        mu = 1;
+        nu = 2;
+        E1 = perturb_parameters[base_index + 1];
+        E2 = perturb_parameters[base_index + 2];
+    } else if (perturb_parameters[base_index + 1] == 0) {
+        mu = 0;
+        nu = 2;
+        E1 = perturb_parameters[base_index];
+        E2 = perturb_parameters[base_index + 2];
+    } else if (perturb_parameters[base_index + 2] == 0) {
+        mu = 0;
+        nu = 1;
+        E1 = perturb_parameters[base_index];
+        E2 = perturb_parameters[base_index + 1];
+    } else {
+        return;
+    }
+    
+    // calculate the perturb field
+    perturb_fields = -0.5 * E1 * E2 * 1e20 * Fm2 / mol; // unit KJ/(mol*nm)
+    std::cout<<"E1 = "<<E1<<"   |   "<<"E2 = "<<E2<<std::endl;
+    std::cout<<"perturb field parameter is "<<perturb_fields<<std::endl;    
+    // calculate the perturb force
+    int munu = 9 * mu + 3 * nu;
+    for (int k = 0; k < DOFn; k++) {     // atom k
+        for (int u = 0; u < 3; u++) {    // x,y,z component for the r(k)_u
+            perturbforce[k][u] -= DPi[27 * k + munu + u] * perturb_fields;  // F = - dV/dr 	    
+        }
+    }
+}
 
 
 

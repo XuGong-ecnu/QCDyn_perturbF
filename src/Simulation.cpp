@@ -1324,7 +1324,7 @@ void Simulation::runPerturbOpenMM(int traj, int nsteps) {
 }
 */
 
-
+/* This is the version that can support one pluse squence.
 void Simulation::runPerturbOpenMM(int traj, int nsteps) {
     int step = Dy->getStep();
     report(traj, step); 
@@ -1373,14 +1373,12 @@ void Simulation::runPerturbOpenMM(int traj, int nsteps) {
         
         int stepsToRun = std::min(skip_steps, nsteps - step);
         std::cout<<" Enter the step  : " << step<<"   and the stepsToRun is "<<stepsToRun<<std::endl; 
-        if (perturbStep <= step && endperturbStep > step) {
-            
+        if (perturbStep <= step && endperturbStep > step) {            
             dynOpenMM->perturbDynamics(stepsToRun, perturbStep - step, forceFieldIndex, scaleFactor);
         }       
 	else {
             dynOpenMM->dynamics(stepsToRun);
         }
-         
         ha->getForces(forces);
             
             // Print the forces of the first atom
@@ -1411,10 +1409,635 @@ void Simulation::runPerturbOpenMM(int traj, int nsteps) {
 
     }
 }
+*/
+/*
+void Simulation::runPerturbOpenMM(int traj, int nsteps) {
+    int step = Dy->getStep();
+    report(traj, step);
+
+    if (nsteps == 0)
+        return;
+
+    static const int skip_steps = getOpenMMReportFrequency();
+
+    std::vector<int> perturb_parameters;
+    std::vector<int> perturb_time_sequence;
+    SplitString(perturb_parameters, param.getStr("perturb_parameters"));
+    SplitString(perturb_time_sequence, param.getStr("perturb_time_sequence"));
+    static const int propagate_state = param.getInt("propagate_state");
+    const int DOFn = param.getInt("DOFn");
+    static std::shared_ptr<HamiltonianOpenMM> ha = std::static_pointer_cast<HamiltonianOpenMM>(Ha);
+    static Structure structure; // empty Structure object
+    // Get writable reference to structure data member
+    static std::vector<std::string>&  atominfo   = structure.getAtomInfo();
+    static std::vector<OpenMM::Vec3>& positions  = structure.getPositions();
+    static std::vector<OpenMM::Vec3>& positions_eq  = structure.getPositions();
+    static std::vector<OpenMM::Vec3>& velocities = structure.getVelocities();
+    static std::vector<OpenMM::Vec3>& forces     = structure.getForces();
+    
+    if (perturb_parameters.size() < 4) {
+        throw std::runtime_error("ERROR: perturb_parameters should contain at least 4 values: forceFieldIndex, scaleFactor, and laser configuration parameters");
+    }
+    
+    int forceFieldIndex = perturb_parameters[2];
+    double scaleFactor = perturb_parameters[3];
+    
+    // check the squence 
+    if (perturb_time_sequence.size() < 1) {
+        throw std::runtime_error("ERROR: perturb_time_sequence should contain at least 1 value: number of pulses");
+    }
+    
+    int num_pulses = perturb_time_sequence[0];
+    if (perturb_time_sequence.size() < 1 + num_pulses * 3) {
+        throw std::runtime_error("ERROR: perturb_time_sequence does not contain enough values for the specified number of pulses");
+    }
+    
+    std::cout << "Number of pulses: " << num_pulses << ", scaleFactor: " << scaleFactor << std::endl;
+    for (int i = 0; i < num_pulses; i++) {
+        int start_step = perturb_time_sequence[1 + i*3];
+        int end_step = perturb_time_sequence[2 + i*3];
+        int config_type = perturb_time_sequence[3 + i*3];
+        std::cout << "Pulse " << i+1 << ": Start=" << start_step << ", End=" << end_step << ", Type=" << config_type << std::endl;
+    }
+    
+    std::shared_ptr<DynamicsOpenMM> dynOpenMM = std::static_pointer_cast<DynamicsOpenMM>(Dy);
+
+    if (step % skip_steps != 0) {
+        std::cout << "Enter the step skip_steps: " << step << std::endl;
+        int run_steps = skip_steps - (step % skip_steps);
+        
+        // check the if the pluse in the range  
+        bool in_pulse = false;
+        int pulse_type = -1;
+        int pulse_start_offset = 0;
+        
+        for (int i = 0; i < num_pulses; i++) {
+            int start_step = perturb_time_sequence[1 + i*3];
+            int end_step = perturb_time_sequence[2 + i*3];
+            int config_type = perturb_time_sequence[3 + i*3];
+            
+            if (step >= start_step && step < end_step && step + run_steps <= end_step) {
+                in_pulse = true;
+                pulse_type = config_type;
+                pulse_start_offset = step - start_step;
+                break;
+            }
+        }
+        
+        if (in_pulse) {
+   
+            dynOpenMM->perturbDynamics(run_steps, pulse_start_offset, forceFieldIndex, scaleFactor, pulse_type);
+        } else {
+          
+            dynOpenMM->dynamics(run_steps);
+	    if(in_free){dynOpenMM->Pi_update();}
+        }
+                
+        step += run_steps;
+        report(traj, step);
+    }
+
+    // main for 
+    int 
+    for (; step < nsteps;) {
+        int stepsToRun = std::min(skip_steps, nsteps - step);
+        std::cout << "Enter the step: " << step << " and the stepsToRun is " << stepsToRun << std::endl;
+        
+        
+        bool in_pulse = false;
+        int pulse_type = -1;
+        int pulse_start_offset = 0;
+        int relex_time = perturb_time_sequence[1]-1;
+        for (int i = 0; i < num_pulses; i++) {
+            int start_step = perturb_time_sequence[1 + i*3];
+            int end_step = perturb_time_sequence[2 + i*3];
+            int config_type = perturb_time_sequence[3 + i*3];
+            
+            
+            if (step >= start_step && step < end_step) {
+		if(step==start_step){std::cout << "Pulse " << i+1 <<" Begin"<< ": Start=" << start_step << ", End=" << end_step << ", Type=" << config_type << std::endl;}
+		if(step==end_step-1){std::cout << "Pulse " << i+1 << " End "<<": Start=" << start_step << ", End=" << end_step << ", Type=" << config_type << std::endl;}
+                in_pulse = true;
+                pulse_type = config_type;
+                pulse_start_offset = step - start_step;
+                break;
+            }
+        }
+        
+        if (in_pulse) {
+                
+            dynOpenMM->perturbDynamics(stepsToRun, pulse_start_offset, forceFieldIndex, scaleFactor, pulse_type);
+	    
+        } else {
+           
+            dynOpenMM->dynamics(stepsToRun);
+            
+
+	    }
+        ha->getForces(forces);
+
+        
+//        if (!forces.empty()) {
+//            std::cout << std::fixed << std::setprecision(10);
+//            const OpenMM::Vec3& firstAtomForce = forces[0];
+//            std::cout << "1. Force on the first atom: ("
+//                      << firstAtomForce[0] << ", "
+//                      << firstAtomForce[1] << ", "
+//                      << firstAtomForce[2] << ")"
+//                      << std::endl;
+//        }
+
+        step += stepsToRun;
+        //  report(traj, step);
+        
+        ha->getForces(forces);
+
+       
+//        if (!forces.empty()) {
+//            std::cout << std::fixed << std::setprecision(10);
+//            const OpenMM::Vec3& firstAtomForce = forces[0];
+//            std::cout << "3. Force on the first atom: ("
+//                      << firstAtomForce[0] << ", "
+//                      << firstAtomForce[1] << ", "
+//                      << firstAtomForce[2] << ")"
+//                      << std::endl;
+//        }
+    }
+}
+*/
+
+
+
+void Simulation::runPerturbOpenMM(int traj, int nsteps) {
+    // Get current simulation step
+    int step = Dy->getStep();
+    report(traj, step);
+
+    // Early return if no steps are requested
+    if (nsteps == 0)
+        return;
+    double kB =1.0;
+    // Constants and parameters
+    static const int skip_steps = getOpenMMReportFrequency();
+    static const double beta = 1.0 / (kB * param.getDouble("temperature")); // Inverse temperature
+    static const int relax_time = param.getInt("relax_time"); // Relaxation time before measurements
+//    static const bool in_free = param.getBool("in_free", false); // Whether in free dynamics mode
+//    static const int direction = param.getInt("direction"); // Direction of perturbation (1=plus, -1=minus)
+    
+    // Retrieve and parse perturbation parameters
+    std::vector<int> perturb_parameters;
+    std::vector<int> perturb_time_sequence;
+    SplitString(perturb_parameters, param.getStr("perturb_parameters"));
+    SplitString(perturb_time_sequence, param.getStr("perturb_time_sequence"));
+    
+    // Simulation parameters
+    static const int propagate_state = param.getInt("propagate_state");
+    static const int LEN_TRAJ = param.getInt("LEN_TRAJ"); // Length of trajectory
+    static const int LEN_TRAJ_SOL = param.getInt("LEN_TRAJ_SOL");
+    static const int LEN_TRAJ_SOL_PER_STEPS = param.getInt("LEN_TRAJ_SOL_PER_STEPS");
+    
+    static const int LEN_TRAJ_PER_STEPS = param.getInt("LEN_TRAJ_PER_STEPS");
+    static const int STEPS_FOR_CONFIG = param.getInt("STEPS_FOR_CONFIG");
+    static const int perturbMD_LEN_TRAJ = param.getInt("perturbMD_LEN_TRAJ");
+    static const int perturb_time = param.getInt("perturb_time"); // Default to perturbMD_LEN_TRAJ if not specified
+    static const int SKIP_SOL = param.getInt("SKIP_SOL"); // Steps to skip for solvent dynamics
+    
+    // System degrees of freedom
+    const int DOFn = param.getInt("DOFn");
+    
+    // Cast Hamiltonian to OpenMM version
+    static std::shared_ptr<HamiltonianOpenMM> ha = std::static_pointer_cast<HamiltonianOpenMM>(Ha);
+    
+    // Structure to hold molecular configuration
+    static Structure structure; // empty Structure object
+    // Get writable references to structure data members
+    static std::vector<std::string>&  atominfo      = structure.getAtomInfo();
+    static std::vector<OpenMM::Vec3>& positions     = structure.getPositions();
+    static std::vector<OpenMM::Vec3>& positions_eq  = structure.getPositions(); // Equilibrium positions
+    static std::vector<OpenMM::Vec3>& velocities    = structure.getVelocities();
+    static std::vector<OpenMM::Vec3>& velocities_eq = structure.getVelocities();
+    static std::vector<OpenMM::Vec3>& forces        = structure.getForces();
+    static std::vector<OpenMM::Vec3> forces_eq      = structure.getForces();;  // Store equilibrium forces
+    
+    // Validate perturbation parameters
+    if (perturb_parameters.size() < 4) {
+        throw std::runtime_error("ERROR: perturb_parameters should contain at least 4 values: forceFieldIndex, scaleFactor, and laser configuration parameters");
+    }
+    
+    int forceFieldIndex = perturb_parameters[2];
+    double scaleFactor = perturb_parameters[3];
+    double E1 = perturb_parameters[5];
+    double E2 = perturb_parameters[7];    
+    // Validate pulse sequence parameters
+    if (perturb_time_sequence.size() < 1) {
+        throw std::runtime_error("ERROR: perturb_time_sequence should contain at least 1 value: number of pulses");
+    }
+    
+    int num_pulses = perturb_time_sequence[0];
+    if (perturb_time_sequence.size() < 1 + num_pulses * 3) {
+        throw std::runtime_error("ERROR: perturb_time_sequence does not contain enough values for the specified number of pulses");
+    }
+    
+    std::cout << "Number of pulses: " << num_pulses << ", scaleFactor: " << scaleFactor << std::endl;
+    
+    // Define detection indices (which observables to track)
+    int munu_t = 2; // composite detection indices at time t2
+    
+    // Log pulse information
+    for (int i = 0; i < num_pulses; i++) {
+        int start_step = perturb_time_sequence[1 + i*3];
+        int end_step = perturb_time_sequence[2 + i*3];
+        int config_type = perturb_time_sequence[3 + i*3];
+        std::cout << "Pulse " << i+1 << ": Start=" << start_step << ", End=" << end_step << ", Type=" << config_type << std::endl;
+    }
+    
+    // Initialize OpenMM dynamics engine
+    std::shared_ptr<DynamicsOpenMM> dynOpenMM = std::static_pointer_cast<DynamicsOpenMM>(Dy);
+    
+    // Variables for energy tracking and trajectory analysis
+    double potential_energy = 0.0;
+    double DV = 0.0;        // Potential energy difference
+    double avgDV = 0.0;     // Average potential energy
+    double ebetaDV_infty = 0.0; // Accumulated boltzmann factor
+    int head_index = 0;
+    int DV_count = 0;
+    int count(0);//count the total number of Pi tensor to get average    
+    // Allocate array for on-the-fly Boltzmann factors
+    std::vector<double> ebetaDV_fly(LEN_TRAJ_SOL, 0.0); // Initialize all elements to 0.0
+    
+    // Response function matrices for plus/minus perturbations
+    std::vector<std::vector<double>> Pi_traj_plus(perturbMD_LEN_TRAJ, std::vector<double>(9, 0.0));  // noneq with plus perturbation
+    std::vector<std::vector<double>> Pi_traj_minus(perturbMD_LEN_TRAJ, std::vector<double>(9, 0.0)); // noneq with minus perturbation
+    std::vector<double> Pi_store(9,0.0);    
+    // Response function accumulation arrays
+    std::vector<std::vector<double>> resp(LEN_TRAJ_SOL_PER_STEPS, std::vector<double>(LEN_TRAJ_PER_STEPS, 0.0));
+    std::vector<std::vector<double>> resp_accum(LEN_TRAJ_SOL_PER_STEPS, std::vector<double>(LEN_TRAJ_PER_STEPS, 0.0));
+    std::vector<double> reoke(LEN_TRAJ_PER_STEPS, 0.0);
+    std::vector<double> reoke_accum(LEN_TRAJ_PER_STEPS, 0.0);
+ 
+    int noneq_count = 0;
+    int perturb_trajectory_num = 0;    
+    // Make sure forces_eq has the correct size
+    forces_eq.resize(positions.size(), OpenMM::Vec3(0, 0, 0));
+    
+    // Align step to skip_steps boundary if needed
+    if (step % skip_steps != 0) {
+        std::cout << "Aligning to step boundary: " << step << std::endl;
+        int run_steps = skip_steps - (step % skip_steps);
+        
+        // Check if we're in a pulse interval
+        bool in_pulse = false;
+        int pulse_type = -1;
+        int pulse_start_offset = 0;
+        
+        for (int i = 0; i < num_pulses; i++) {
+            int start_step = perturb_time_sequence[1 + i*3];
+            int end_step = perturb_time_sequence[2 + i*3];
+            int config_type = perturb_time_sequence[3 + i*3];
+            
+            if (step >= start_step && step < end_step && step + run_steps <= end_step) {
+                in_pulse = true;
+                pulse_type = config_type;
+                pulse_start_offset = step - start_step;
+                break;
+            }
+        }
+        
+        // Run dynamics with or without perturbation based on pulse interval
+        if (in_pulse) {
+            // Apply perturbation during pulse
+            dynOpenMM->perturbDynamics(run_steps, pulse_start_offset, forceFieldIndex, scaleFactor, pulse_type);
+        } else {
+            // Regular dynamics outside pulse
+            dynOpenMM->dynamics(run_steps);
+        }
+                
+        step += run_steps;
+        report(traj, step);
+    }
+
+    // Main simulation loop
+    int perturb_plus_timestep = 0;
+    int t1, t2, t1_index; // Variables for response function calculation
+    
+    for (; step < nsteps;) {
+        // Determine how many steps to run in this iteration
+        int stepsToRun = std::min(skip_steps, nsteps - step);
+        std::cout << "Enter the step: " << step << " and the stepsToRun is " << stepsToRun << std::endl;
+        
+        // Run regular dynamics
+        dynOpenMM->dynamics(stepsToRun);
+        
+        // During relaxation phase, accumulate potential energy
+        if (step < relax_time) {
+            std::cout << "Time step is " << step << ": potential_e is " << ha->getPotentialEnergy(propagate_state, true) << std::endl;
+	    std::cout << "Time step is " << step << ": potential_g is " << ha->getPotentialEnergy(1, true) << std::endl;
+            potential_energy += (ha->getPotentialEnergy(propagate_state, true) - ha->getPotentialEnergy(1, true));
+        }
+        
+        // At end of relaxation phase, calculate average potential energy
+        if (step == relax_time) {
+            potential_energy /=  relax_time;// if divided by DOFn?
+            avgDV = potential_energy;
+            std::cout << "Time step is " << step << ": average potential is " << avgDV << std::endl;    
+        }
+        
+        // During solvent equilibration phase, calculate Boltzmann factors
+	if (step >= relax_time && step < LEN_TRAJ_SOL) {
+            head_index = DV_count % LEN_TRAJ_SOL_PER_STEPS; // Index of current latest entry of on the fly Pi
+            DV = ha->getPotentialEnergy(propagate_state, true) - ha->getPotentialEnergy(1, true);
+	    
+            ebetaDV_fly[head_index] = exp(beta * (DV - avgDV));
+            std::cout<<"ebeta " << head_index<<" is :" << ebetaDV_fly[head_index] << std::endl;
+	    std::cout<<"beta is  = "<< beta <<"  DV is "<<DV<<std::endl;
+            // ebetaDV = e^{beta*(DV(t)-<DV>)}, <DV>=avgDV, but the const e^<DV> cancelled by denominator
+            ebetaDV_infty += ebetaDV_fly[head_index];
+            DV_count++;
+        }
+
+        if ( step >= (LEN_TRAJ_SOL + relax_time) && (step - (relax_time + LEN_TRAJ_SOL)) % STEPS_FOR_CONFIG != 0) {
+            head_index = DV_count % LEN_TRAJ_SOL_PER_STEPS; // Index of current latest entry of on the fly Pi
+            DV = (ha->getPotentialEnergy(propagate_state, true)-ha->getPotentialEnergy(1, true));
+            ebetaDV_fly[head_index] = exp(beta * (DV - avgDV));
+	    std::cout<<"ebeta " << head_index<<" is :" << ebetaDV_fly[head_index] << std::endl;   
+            // ebetaDV = e^{beta*(DV(t)-<DV>)}, <DV>=avgDV, but the const e^<DV> cancelled by denominator
+            ebetaDV_infty += ebetaDV_fly[head_index];
+            DV_count++;
+        }
+        
+        // Run perturbed MD simulations to collect response data at specified intervals
+        if (step >= (LEN_TRAJ_SOL + relax_time) && (step - (relax_time + LEN_TRAJ_SOL)) % STEPS_FOR_CONFIG == 0) {
+	    std::cout << "**************** Enter the Perturb Point" << step << "*******************************************" << std::endl;
+	    std::cout << "**************** This is number " << perturb_trajectory_num << " trajectory *******************************************" << std::endl;
+	    auto start = std::chrono::high_resolution_clock::now();
+        
+
+            // Save the current equilibrium configuration
+            ha->getForces(forces);
+            ha->getVelocities(velocities);
+            ha->getPositions(positions);
+	    ha->getForces(forces_eq);
+            ha->getVelocities(velocities_eq);
+            ha->getPositions(positions_eq);
+            
+            std::cout<<"**************** Start to store the configuration*******************************************"<<std::endl; 
+            // Store equilibrium state
+            for (int k = 0; k < DOFn; k++) { 
+                for (int a = 0; a < 3; a++) {
+                    positions_eq[k][a] = positions[k][a];
+                    velocities_eq[k][a] = velocities[k][a];
+                    forces_eq[k][a] = forces[k][a];
+                }
+            }
+	    std::cout << "*******Restore the equilibrium state******** :"<< std::endl
+                      << "x :"<<positions_eq[0][0]<<std::endl
+                      << "y :"<<positions_eq[0][1]<<std::endl
+                      << "z :"<<positions_eq[0][2]<<std::endl;
+            std::cout<<"**************** Finish storing the configuration*******************************************"<<std::endl;
+            // Run perturbed dynamics with positive perturbation
+            bool in_pulse = false;
+            int pulse_type = -1;
+            int pulse_start_offset = 0;
+            noneq_count = 0;
+           
+
+            head_index = DV_count % perturbMD_LEN_TRAJ; // Index of current latest entry of on the fly Pi
+            DV = (ha->getPotentialEnergy(propagate_state, true) - ha->getPotentialEnergy(1, true));
+            ebetaDV_fly[head_index] = exp(beta * (DV - avgDV));
+            std::cout<<"ebeta " << head_index<<" is :" << ebetaDV_fly[head_index] << std::endl;
+            // ebetaDV = e^{beta*(DV(t)-<DV>)}, <DV>=avgDV, but the const e^<DV> cancelled by denominator
+            ebetaDV_infty += ebetaDV_fly[head_index];
+            DV_count++;
+
+
+            // Positive perturbation loop
+            for (int index_plus = 0; index_plus < perturbMD_LEN_TRAJ; index_plus++) {
+                // Continue tracking Boltzmann factors during perturbed run
+		if(index_plus == 0 ){std::cout<<"**************** Enter the perturb MD *******************************************"<<std::endl;}
+                 
+                in_pulse = false;                
+                // Check if current step is within a pulse period
+                for (int i = 0; i < num_pulses; i++) {
+                    int start_step = perturb_time_sequence[1 + i*3];
+                    int end_step = perturb_time_sequence[2 + i*3];
+                    int config_type = perturb_time_sequence[3 + i*3];
+                    
+                    if (index_plus >= start_step && index_plus < end_step) {
+                        if (index_plus == start_step) {
+                            std::cout << "Pulse " << i+1 << " Begin" << ": Start=" << start_step 
+                                      << ", End=" << end_step << ", Type=" << config_type << std::endl;
+                        }
+                        if (index_plus == end_step-1) {
+                            std::cout << "Pulse " << i+1 << " End " << ": Start=" << start_step 
+                                      << ", End=" << end_step << ", Type=" << config_type << std::endl;
+                        }
+                        in_pulse = true;
+                        pulse_type = config_type;
+                        pulse_start_offset = index_plus - start_step; // Correct offset calculation
+                        break;
+                    }
+                }
+                if(index_plus == 0 ){std::cout<<"**************** The plus time is "<<pulse_start_offset << " *******************************************"<<std::endl;}
+                // Apply perturbation or regular dynamics based on pulse status
+                if (in_pulse) {    
+                    std::cout << "Plus Step "<< index_plus << "  and in pluse range"<< std::endl;
+	            dynOpenMM->perturbDynamics(1, pulse_start_offset, forceFieldIndex, scaleFactor, pulse_type);
+	            dynOpenMM->Pi_update(Pi_store);
+		    std::cout<< " noneq_count is "<< noneq_count;
+		    for(int p =0;p<9;p++){Pi_traj_plus[noneq_count][p] = Pi_store[p];}
+                    noneq_count++;
+                } else {
+		    std::cout << "Plus Step "<< index_plus <<std::endl;
+                    dynOpenMM->dynamics(1);
+		    dynOpenMM->Pi_update(Pi_store);
+		    std::cout<< " noneq_count is "<< noneq_count;
+                    for(int p =0;p<9;p++){Pi_traj_plus[noneq_count][p] = Pi_store[p];}
+
+		    noneq_count++;
+                }
+            }
+            
+            // Restore the original equilibrium configuration for negative perturbation run
+            for (int k = 0; k < DOFn; k++) {
+                for (int a = 0; a < 3; a++) {
+                    positions[k][a] = positions_eq[k][a];
+                    velocities[k][a] = velocities_eq[k][a];
+                    forces[k][a] = forces_eq[k][a];
+                }
+            }
+            
+            // Apply the configuration to the OpenMM context
+            ha->setPositions(positions);
+            ha->setVelocities(velocities);
+            ha->setForces(forces);
+            std::cout << "*******Restore the original equilibrium configuration for negative perturbation run******** :"<< std::endl
+                      << "x :"<<positions_eq[0][0]<<std::endl
+                      << "y :"<<positions_eq[0][1]<<std::endl
+                      << "z :"<<positions_eq[0][2]<<std::endl;
 
 
 
 
+            // Negative perturbation loop
+            noneq_count = 0;
+            for (int index_minus = 0; index_minus < perturbMD_LEN_TRAJ; index_minus++) {
+                // Check if current step is within a pulse period
+                in_pulse = false;
+                for (int i = 0; i < num_pulses; i++) {
+                    int start_step = perturb_time_sequence[1 + i*3];
+                    int end_step = perturb_time_sequence[2 + i*3];
+                    int config_type = perturb_time_sequence[3 + i*3];
+                    
+                    if (index_minus >= start_step && index_minus < end_step) {
+                        if (index_minus == start_step) {
+                            std::cout << "Pulse " << i+1 << " Begin" << ": Start=" << start_step 
+                                      << ", End=" << end_step << ", Type=" << config_type << std::endl;
+                        }
+                        if (index_minus == end_step-1) {
+                            std::cout << "Pulse " << i+1 << " End " << ": Start=" << start_step 
+                                      << ", End=" << end_step << ", Type=" << config_type << std::endl;
+                        }
+                        in_pulse = true;
+                        pulse_type = config_type;
+                        pulse_start_offset = index_minus - start_step;
+                        break;
+                    }
+                }
+                
+                // Apply perturbation with opposite sign or regular dynamics
+                if (in_pulse) { 
+		    std::cout << "Minus Step "<< index_minus << "  and in pluse range"<< std::endl;
+                    dynOpenMM->perturbDynamics(1, pulse_start_offset, forceFieldIndex, -scaleFactor, pulse_type); // Note negative scaleFactor
+		    dynOpenMM->Pi_update(Pi_store);
+		    std::cout<< " noneq_count is "<< noneq_count;
+                    for(int p =0;p<9;p++){Pi_traj_minus[noneq_count][p] = Pi_store[p];}
+
+                    noneq_count++;
+                } else {
+	            std::cout << "Minus Step "<< index_minus <<std::endl;
+                    dynOpenMM->dynamics(1);
+		    dynOpenMM->Pi_update(Pi_store);
+		    std::cout<< " noneq_count is "<< noneq_count;
+                    for(int p =0;p<9;p++){Pi_traj_minus[noneq_count][p] = Pi_store[p];}
+		    noneq_count++;
+                }
+            }
+          auto end = std::chrono::high_resolution_clock::now();
+          std::chrono::duration<double> elapsedTime = end - start;
+          std::cout << "The total perturb trajectory elapsed time is " << std::fixed << std::setprecision(3) << elapsedTime.count()  << " seconds.\n";
+
+            
+            // Restore original configuration after perturbation runs
+            for (int k = 0; k < DOFn; k++) {
+                for (int a = 0; a < 3; a++) {
+                    positions[k][a] = positions_eq[k][a];
+                    velocities[k][a] = velocities_eq[k][a];
+                    forces[k][a] = forces_eq[k][a];
+                }
+            }
+	    std::cout << "*******Restore original configuration after perturbation runs, the first atom position is******** :"<< std::endl 
+                      << "x :"<<positions_eq[0][0]<<std::endl
+                      << "y :"<<positions_eq[0][1]<<std::endl
+		      << "z :"<<positions_eq[0][2]<<std::endl;
+
+            // Apply the restored configuration
+            ha->setPositions(positions);
+            ha->setVelocities(velocities);
+            ha->setForces(forces);
+            
+            // Calculate single-trajectory response function
+            std::cout << "Get single-traj response function" << std::endl;
+            // R(t1,t2) = [plus perturb(t2) - minus perturb(t2)] * ebetaDV(-t1)
+            for (t1 = 0; t1 < LEN_TRAJ_SOL_PER_STEPS; t1++) { // t1 = 0 ~ LEN_TRAJ_SOL / STEPS_SOL
+                // t1_index for ebetaDV_fly[LEN_TRAJ_SOL/STEPS] and SKIP_SOL = STEPS_SOL / STEPS
+                t1_index = (head_index - t1 * SKIP_SOL + LEN_TRAJ_SOL_PER_STEPS) % LEN_TRAJ_SOL_PER_STEPS; // Ensure positive modulo
+                
+                for (t2 = 0; t2 < LEN_TRAJ_PER_STEPS; t2++) { // t2 = 0 ~ LEN_TRAJ / STEPS
+                    resp[t1][t2] = (Pi_traj_plus[t2][munu_t] - Pi_traj_minus[t2][munu_t]) * ebetaDV_fly[t1_index];
+                    resp_accum[t1][t2] += resp[t1][t2];
+                }
+            }
+            for (t2 = 0; t2 < LEN_TRAJ_PER_STEPS; t2++) { // t2 = 0 ~ LEN_TRAJ / STEPS
+                    reoke[t2] = (Pi_traj_plus[t2][munu_t] - Pi_traj_minus[t2][munu_t]);
+                    reoke_accum[t2] += reoke[t2];
+
+            }
+
+
+
+
+	    DV_count++;
+            count++; //count of trajectories from eq sampling
+
+        }
+        
+        // Get forces for reporting
+        ha->getForces(forces);
+        
+        // Increment step counter
+        step += stepsToRun;
+        report(traj, step);
+    }
+    //double perturb_fields = 0.5 * E1 * E2 * 1e20 * Fm2 / mol;
+
+
+    //ebetaDV_infty /= DV_count;
+
+    //SPSP response normalization
+    for (t1 = 0; t1 < LEN_TRAJ_SOL ; t1++) {
+        for (t2 = 0; t2 < LEN_TRAJ_PER_STEPS ; t2++) {
+            //resp_accum[t1][t2] /= count  * ebetaDV_infty * perturb_fields; //devided by E1E2, not yet DT!!
+            resp_accum[t1][t2] /= count;
+	}
+    }
+
+    for (t2 = 0; t2 < LEN_TRAJ_PER_STEPS ; t2++) {
+            reoke_accum[t2] /= count;    
+    }
+
+    std::cout<<"Generate the resp file"<<std::endl;
+    const std::string file = "response_data.csv"; 
+    
+    FILE* fp = CheckFile(file);
+    //FILE *fp = fopen("response_data.csv", "w");
+    std::cout<<"Finshed generate the resp file"<<std::endl;
+if (fp == NULL) {
+    printf("Error opening file for writing\n");
+
+} else {
+    fprintf(fp, "t1,");
+    for (int t2 = 0; t2 < LEN_TRAJ_PER_STEPS; t2++) {
+        fprintf(fp, "t2_%d%s", t2, (t2 < LEN_TRAJ_PER_STEPS - 1) ? "," : "\n");
+    }
+    for (int t1 = 0; t1 < LEN_TRAJ_SOL; t1++) {
+        fprintf(fp, "%d,", t1);
+        for (int t2 = 0; t2 < LEN_TRAJ_PER_STEPS; t2++) {
+            fprintf(fp, "%e%s", resp_accum[t1][t2], (t2 < LEN_TRAJ_PER_STEPS - 1) ? "," : "\n");
+        }
+    }
+    fclose(fp);
+    printf("Data successfully saved to response_data.csv\n");
+
+   
+}
+  std::cout<<"Generate the reoke file"<<std::endl;
+const std::string reoke_file = "reoke_data.csv";
+FILE* fp_reoke = CheckFile(reoke_file);
+std::cout<<"Finished generate the reoke file"<<std::endl;
+if (fp_reoke == NULL) {
+    printf("Error opening reoke file for writing\n");
+} else {
+    // For one-dimensional data, just output the values with their indices
+    fprintf(fp_reoke, "t2,value\n");
+    for (int t2 = 0; t2 < LEN_TRAJ_PER_STEPS; t2++) {
+        fprintf(fp_reoke, "%d,%e\n", t2, reoke_accum[t2]);
+    }
+    fclose(fp_reoke);
+    printf("Data successfully saved to reoke_data.csv\n");
+}
+
+
+}
 
 
 
@@ -1764,7 +2387,7 @@ void Simulation::reportOpenMMData(int traj, int step) {
             if (!forces.empty()) { // Ensure there are forces to print
                 std::cout << std::fixed << std::setprecision(10);
 		const OpenMM::Vec3& firstAtomForce = forces[0];
-                std::cout << "Force on the first atom: ("
+               std::cout << "Force on the first atom: ("
                           << firstAtomForce[0] << ", "
                           << firstAtomForce[1] << ", "
                           << firstAtomForce[2] << ")"

@@ -212,6 +212,17 @@ void AddDefaultParameters(Parameters& param) {
     defaultParam.emplace_back("dampingParam2",            "",       "double"   );
     defaultParam.emplace_back("dampingParam3",            "",       "double"   );
     defaultParam.emplace_back("xxxxxx",            "",       "double"   ); //gongxu
+    // Response function calculation parameters
+    defaultParam.emplace_back("LEN_TRAJ_SOL",            "1000",      "int"   );
+    defaultParam.emplace_back("LEN_TRAJ_SOL_PER_STEPS",  "100",       "int"   );
+    defaultParam.emplace_back("LEN_TRAJ_PER_STEPS",      "100",       "int"   );
+    defaultParam.emplace_back("STEPS_FOR_CONFIG",        "100",       "int"   );
+    defaultParam.emplace_back("perturbMD_LEN_TRAJ",      "1000",      "int"   );
+    defaultParam.emplace_back("perturb_time",            "1000",      "int"   );
+    defaultParam.emplace_back("SKIP_SOL",                "10",        "int"   );
+    defaultParam.emplace_back("relax_time",                "10",        "int"   );
+    defaultParam.emplace_back("SPSP_response_file",            "",           "str"   );
+
     // This is for C60 model vdw model
     defaultParam.emplace_back("LJ_type",                 "",           "str"   );
     // Settings for MixPES dyn_type
@@ -219,6 +230,7 @@ void AddDefaultParameters(Parameters& param) {
     // Settings for perturb MD production
     // This is the perturb elec part paramenters
     defaultParam.emplace_back("perturb_parameters",      "",           "str"   );
+    defaultParam.emplace_back("perturb_time_sequence",      "",           "str"   );
     // This is to judge the perturb
     defaultParam.emplace_back("perturb",                 "false",      "bool"  );
     defaultParam.emplace_back("steps_for_config",          "",          "int"  );
